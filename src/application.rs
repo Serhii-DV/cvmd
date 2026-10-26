@@ -115,13 +115,6 @@ fn reserve_directory(parent: &Path, name: &str) -> Result<PathBuf> {
     }
 }
 
-pub fn locate(config: &Config) -> Result<PathBuf> {
-    let path = discover(config)?.context(
-        "Run this command from a dated application directory (or one of its subdirectories)",
-    )?;
-    require_cv(path)
-}
-
 pub fn require_cv(path: PathBuf) -> Result<PathBuf> {
     ensure!(
         path.join("cv.md").is_file(),

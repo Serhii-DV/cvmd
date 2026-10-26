@@ -314,8 +314,82 @@ fn reports_missing_and_malformed_configurations() {
     fs::create_dir_all(workspace.config.parent().unwrap()).unwrap();
     fs::write(&workspace.config, "root = [").unwrap();
     failure(
-        workspace.command().arg("build").output().unwrap(),
+        workspace
+            .command()
+            .args(["build", "acme"])
+            .output()
+            .unwrap(),
         "Invalid configuration",
+    );
+}
+
+#[test]
+fn bare_edit_and_build_show_help_with_missing_or_invalid_configuration() {
+    let workspace = Workspace::empty();
+    for invalid_config in [false, true] {
+        if invalid_config {
+            fs::create_dir_all(workspace.config.parent().unwrap()).unwrap();
+            fs::write(&workspace.config, "root = [").unwrap();
+        }
+        for command in ["edit", "build"] {
+            let expected = success(
+                workspace
+                    .command()
+                    .args([command, "--help"])
+                    .output()
+                    .unwrap(),
+            );
+            let output = workspace.command().arg(command).output().unwrap();
+            assert!(
+                output.stderr.is_empty(),
+                "help must not print configuration errors"
+            );
+            assert_eq!(success(output), expected);
+            assert!(expected.contains(&format!("Usage: cvmd {command}")));
+            assert!(expected.contains("company or position alias"));
+            assert!(expected.contains(&format!("cvmd {command} google")));
+        }
+        assert!(!workspace.root.exists());
+        if !invalid_config {
+            assert!(!workspace.config.exists());
+        }
+    }
+    assert_eq!(fs::read_to_string(workspace.config).unwrap(), "root = [");
+}
+
+#[test]
+fn bare_edit_and_build_show_help_inside_and_outside_applications_without_running_tools() {
+    let workspace = Workspace::new();
+    let application = workspace.application("ACME", "Developer");
+    let nested = application.join("attachments");
+    fs::create_dir(&nested).unwrap();
+    workspace.configure("pdf", "renderer", "/nonexistent/cvmd-test-renderer");
+    let config_before = fs::read(&workspace.config).unwrap();
+    for directory in [workspace.temp.path(), &application, &nested] {
+        for command in ["edit", "build"] {
+            let expected = success(
+                workspace
+                    .command()
+                    .args([command, "--help"])
+                    .output()
+                    .unwrap(),
+            );
+            let output = workspace
+                .command()
+                .current_dir(directory)
+                .env("EDITOR", "/nonexistent/cvmd-test-editor")
+                .arg(command)
+                .output()
+                .unwrap();
+            assert!(output.stderr.is_empty());
+            assert_eq!(success(output), expected);
+        }
+    }
+    assert!(!application.join("cv.pdf").exists());
+    assert_eq!(fs::read(&workspace.config).unwrap(), config_before);
+    assert_eq!(
+        fs::read(application.join("cv.md")).unwrap(),
+        include_bytes!("fixtures/cv.md")
     );
 }
 
@@ -368,14 +442,14 @@ mod unix {
                 .command()
                 .env("HOME", workspace.temp.path())
                 .current_dir(path)
-                .arg("build")
+                .args(["build", "acme"])
                 .output()
                 .unwrap(),
         );
     }
 
     #[test]
-    fn editor_supports_arguments_nested_directories_and_filesystem_discovery() {
+    fn editor_supports_arguments_and_alias_search_from_nested_directories() {
         let workspace = Workspace::new();
         let application = workspace.application("ACME", "Developer");
         let nested = application.join("attachments");
@@ -397,7 +471,7 @@ mod unix {
                     format!("'{}' --wait 'two words'", editor.display()),
                 )
                 .env("CAPTURE", &capture)
-                .arg("edit")
+                .args(["edit", "acme"])
                 .output()
                 .unwrap(),
         );
@@ -415,7 +489,7 @@ mod unix {
                 .current_dir(&application)
                 .env_remove("EDITOR")
                 .env("CAPTURE", &capture)
-                .arg("edit")
+                .args(["edit", "acme"])
                 .output()
                 .unwrap(),
         );
@@ -424,7 +498,7 @@ mod unix {
                 .command()
                 .current_dir(&application)
                 .env("EDITOR", "'unterminated")
-                .arg("edit")
+                .args(["edit", "acme"])
                 .output()
                 .unwrap(),
             "Invalid quoting",
@@ -435,7 +509,7 @@ mod unix {
                 .command()
                 .current_dir(application)
                 .env("EDITOR", failing_editor)
-                .arg("edit")
+                .args(["edit", "acme"])
                 .output()
                 .unwrap(),
             "Editor exited unsuccessfully",
@@ -443,19 +517,15 @@ mod unix {
     }
 
     #[test]
-    fn rejects_unrelated_directories_and_missing_application_cv() {
+    fn rejects_missing_application_cv() {
         let workspace = Workspace::new();
-        failure(
-            workspace.command().arg("build").output().unwrap(),
-            "Run this command from a dated application directory",
-        );
         let application = workspace.application("ACME", "Developer");
         fs::remove_file(application.join("cv.md")).unwrap();
         failure(
             workspace
                 .command()
                 .current_dir(application)
-                .arg("edit")
+                .args(["edit", "acme"])
                 .output()
                 .unwrap(),
             "Application CV is missing",
@@ -478,7 +548,7 @@ mod unix {
             workspace
                 .command()
                 .current_dir(&application)
-                .arg("build")
+                .args(["build", "acme"])
                 .env("ARGUMENTS", &arguments)
                 .env("INPUT", &input)
                 .output()
@@ -507,7 +577,7 @@ mod unix {
             workspace
                 .command()
                 .current_dir(&application)
-                .arg("build")
+                .args(["build", "acme"])
                 .output()
                 .unwrap(),
             "PDF renderer exited unsuccessfully",
@@ -518,7 +588,7 @@ mod unix {
             workspace
                 .command()
                 .current_dir(&application)
-                .arg("build")
+                .args(["build", "acme"])
                 .output()
                 .unwrap(),
             "Renderer output is not a PDF",
@@ -528,7 +598,7 @@ mod unix {
             workspace
                 .command()
                 .current_dir(&application)
-                .arg("build")
+                .args(["build", "acme"])
                 .output()
                 .unwrap(),
             "Cannot start PDF renderer",
@@ -547,7 +617,7 @@ mod unix {
             workspace
                 .command()
                 .current_dir(application)
-                .arg("build")
+                .args(["build", "acme"])
                 .output()
                 .unwrap(),
             "Cannot find shared stylesheet",
@@ -1073,7 +1143,7 @@ mod alias_selection {
     }
 
     #[test]
-    fn legacy_folders_support_alias_selection_and_edit_build_without_metadata() {
+    fn legacy_folders_support_alias_selection_and_info_without_metadata() {
         let workspace = Workspace::new();
         let application = workspace.named_application(
             "Legacy / Co",
@@ -1106,24 +1176,15 @@ mod alias_selection {
         fs::remove_file(application.join("application.toml")).unwrap();
         let nested = application.join("attachments");
         fs::create_dir(&nested).unwrap();
-        success(
-            workspace
-                .command()
-                .current_dir(&nested)
-                .arg("edit")
-                .env("EDITOR", &editor)
-                .env("CAPTURE", &capture)
-                .output()
-                .unwrap(),
-        );
-        success(
+        let report = success(
             workspace
                 .command()
                 .current_dir(nested)
-                .arg("build")
+                .arg("info")
                 .output()
                 .unwrap(),
         );
+        assert!(report.contains(application.to_str().unwrap()));
         assert_eq!(
             fs::read(application.join("cv.pdf")).unwrap(),
             b"%PDF-1.7 mock"

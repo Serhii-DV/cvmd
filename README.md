@@ -34,8 +34,8 @@ cvmd init ~/CVs --master ~/Documents/my-cv.md
 # Create an application and enter its directory. --job is optional.
 cd "$(cvmd new 'ACME / R&D A/S' 'Senior PHP/TS Developer' --job ~/Downloads/job.md)"
 
-cvmd edit
-cvmd build
+cvmd edit acme_r_d_a_s
+cvmd build acme_r_d_a_s
 ```
 
 `new` prints the new directory's absolute path. It copies the master CV without
@@ -79,8 +79,10 @@ The filesystem remains the source of application organization: the date is
 derived from the directory, and no database, statuses, or index are maintained.
 The identity file is not required for `edit` or `build` to discover an application.
 
-Run `edit` or `build` inside an application directory or one of its subdirectories.
-You can also edit all Markdown and TOML files directly without the CLI.
+Pass an alias to `edit` or `build` to select an application. Without an alias, either
+command prints its help and exits successfully, including inside an application
+directory. No configuration is needed to display help. You can also edit all
+Markdown and TOML files directly without the CLI.
 
 ### Find an application by alias
 
@@ -97,8 +99,8 @@ Matching is exact and case-insensitive. A single match is used directly; multipl
 matches produce a numbered list, newest first. Enter a number to select a folder,
 or enter `q` or a blank line to cancel. Invalid numbers prompt again; end-of-input
 cancels without launching an editor or renderer. Lists and prompts go to stderr.
-No match produces a helpful error. Without an alias, commands use the current
-application directory as before. `cvmd info` shows its company and position aliases.
+No match produces a helpful error. `cvmd info`, run inside an application directory,
+shows its company and position aliases.
 
 New folders can be searched without `application.toml`, since their aliases are
 encoded in the folder name. Existing folders with fractional seconds remain

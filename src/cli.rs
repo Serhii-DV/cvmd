@@ -1,4 +1,5 @@
-use clap::{Parser, Subcommand};
+use anyhow::{Context, Result};
+use clap::{CommandFactory, Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -30,14 +31,26 @@ pub enum Commands {
         #[arg(long, value_name = "FILE")]
         job: Option<PathBuf>,
     },
-    /// Open an application CV, optionally finding it by company or position alias
+    /// Open an application CV by company or position alias
+    #[command(after_help = "Examples:\n  cvmd edit google\n  cvmd edit software_engineer")]
     Edit {
-        /// Exact company or position alias; choose from a list if several match
+        /// Exact company or position alias; omit to show help
         alias: Option<String>,
     },
-    /// Render an application CV, optionally finding it by company or position alias
+    /// Render an application CV by company or position alias
+    #[command(after_help = "Examples:\n  cvmd build google\n  cvmd build software_engineer")]
     Build {
-        /// Exact company or position alias; choose from a list if several match
+        /// Exact company or position alias; omit to show help
         alias: Option<String>,
     },
+}
+
+pub fn print_command_help(name: &str) -> Result<()> {
+    let mut cli = Cli::command();
+    cli.build();
+    cli.find_subcommand_mut(name)
+        .context("Cannot find command help")?
+        .print_help()?;
+    println!();
+    Ok(())
 }

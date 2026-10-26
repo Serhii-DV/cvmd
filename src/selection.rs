@@ -79,10 +79,7 @@ fn choose(matches: &[PathBuf]) -> Result<PathBuf> {
     }
 }
 
-pub fn resolve(config: &Config, query: Option<&str>) -> Result<PathBuf> {
-    let Some(query) = query else {
-        return application::locate(config);
-    };
+pub fn resolve(config: &Config, query: &str) -> Result<PathBuf> {
     let query = query.trim();
     ensure!(!query.is_empty(), "Application alias cannot be empty");
     let matches = find(config, query)?;

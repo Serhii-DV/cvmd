@@ -12,10 +12,11 @@ use cli::{Cli, Commands};
 
 fn run() -> Result<()> {
     let cli = Cli::parse();
-    let config_path = config::location(cli.config.as_deref())?;
+    let config_path = || config::location(cli.config.as_deref());
     match cli.command {
-        Commands::Info => info::show(&config_path, cli.config.is_some())?,
+        Commands::Info => info::show(&config_path()?, cli.config.is_some())?,
         Commands::Init { path, master } => {
+            let config_path = config_path()?;
             let root = workspace::initialize(&path, master.as_deref(), &config_path)?;
             println!("Initialized {}", root.display());
             println!("Configuration: {}", config_path.display());
@@ -25,19 +26,25 @@ fn run() -> Result<()> {
             position,
             job,
         } => {
-            let config = config::Config::load(&config_path)?;
+            let config = config::Config::load(&config_path()?)?;
             let path = application::create(&config, &company, &position, job.as_deref())?;
             // Print just the path so it can be used with: cd "$(cvmd new ...)".
             println!("{}", path.display());
         }
         Commands::Edit { alias } => {
-            let config = config::Config::load(&config_path)?;
-            let path = selection::resolve(&config, alias.as_deref())?;
+            let Some(alias) = alias else {
+                return cli::print_command_help("edit");
+            };
+            let config = config::Config::load(&config_path()?)?;
+            let path = selection::resolve(&config, &alias)?;
             application::edit(&config, &path)?;
         }
         Commands::Build { alias } => {
-            let config = config::Config::load(&config_path)?;
-            let path = selection::resolve(&config, alias.as_deref())?;
+            let Some(alias) = alias else {
+                return cli::print_command_help("build");
+            };
+            let config = config::Config::load(&config_path()?)?;
+            let path = selection::resolve(&config, &alias)?;
             let output = pdf::build(&config, &path)?;
             println!("Built {}", output.display());
         }

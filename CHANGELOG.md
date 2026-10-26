@@ -11,6 +11,8 @@
 
 ### Changed
 
+- Bare `edit` and `build` commands show their help and exit successfully without
+  loading configuration. Pass a company or position alias to edit or build a CV.
 - New application folders use `YYYY-MM-DD_HH-MM-SS.company_alias.position_alias`,
   with local time and second precision. Existing date-only and fractional-second
   folders remain supported.

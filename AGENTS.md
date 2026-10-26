@@ -17,14 +17,19 @@ tests; `tests/fixtures/` holds synthetic inputs. `.github/workflows/ci.yml` defi
 
 ## Build, Test, and Development Commands
 
-Use a current stable Rust toolchain:
+Use a current stable Rust toolchain and prefer Makefile targets whenever available.
+Run `make help` to list targets. Use Cargo directly for operations without a
+Makefile target.
 
-- `cargo build --locked`: build the development binary.
-- `cargo run -- --help`: inspect local CLI usage.
-- `cargo run -- --config /tmp/cvmd-config.toml init /tmp/cvmd-workspace`: initialize an isolated workspace.
-- `cargo test --locked`: run the test suite.
-- `cargo fmt --all`: format Rust code; add `-- --check` to verify formatting.
-- `cargo clippy --locked --all-targets -- -D warnings`: run CI lint checks.
+- `make build`: build and install `cvmd` into Cargo's binary directory.
+- `make build-dev`: build the development binary without installing it.
+- `make cli-help`: inspect local CLI usage.
+- `make init-dev`: initialize a fresh isolated workspace and config under `/tmp`.
+- `make fmt`: apply Rust formatting.
+- `make check`: run all CI checks (formatting, Clippy, and tests).
+- `make fmt-check`: check Rust formatting.
+- `make lint`: run Clippy with warnings treated as errors.
+- `make test`: run the test suite.
 
 Real PDF builds require separately installed `md-to-pdf` and Chromium dependencies.
 Tests use stubs and do not require them.
@@ -43,7 +48,7 @@ Use Rust's built-in test harness and isolated `tempfile` workspaces. Name tests 
 observable behavior, such as `invalid_inputs_do_not_leave_partial_applications`.
 Cover changed behavior, especially path resolution, exact TOML names, collisions,
 and preservation of existing files after failures. Shell-based process tests are
-Unix-only. No numeric coverage threshold is configured. Run all CI checks before
+Unix-only. No numeric coverage threshold is configured. Run `make check` before
 submitting changes.
 
 ## Commit & Pull Request Guidelines

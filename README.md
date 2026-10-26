@@ -357,11 +357,18 @@ since cvmd expects the renderer to return the PDF on stdout.
 
 ## Development
 
+Run all development checks with Make:
+
 ```sh
-cargo fmt --all -- --check
-cargo clippy --locked --all-targets -- -D warnings
-cargo test --locked
+make check
 ```
+
+Use `make fmt-check`, `make lint`, or `make test` to run formatting, Clippy,
+or tests individually.
+
+Use `make build-dev` to build without installing, `make cli-help` to inspect CLI
+usage, and `make fmt` to apply formatting. `make init-dev` creates a fresh isolated
+workspace and config under `/tmp` and prints their paths.
 
 Integration tests use isolated workspaces and stub editor/renderer executables,
 so the test suite does not require Chromium or open an editor. Process integration

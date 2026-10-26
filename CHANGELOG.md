@@ -4,6 +4,10 @@
 
 ### Added
 
+- `make check` runs all development checks; `make fmt-check`, `make lint`, and
+  `make test` run them individually.
+- `make build-dev`, `make cli-help`, `make init-dev`, and `make fmt` build locally,
+  show CLI usage, initialize a fresh temporary workspace, and apply formatting.
 - New workspaces include a shared md-to-pdf config and two-column Markdown styles.
   `pdf.config_file` selects a renderer config relative to the workspace and
   defaults to `assets/pdf.config.js`. The JavaScript config controls stylesheets,

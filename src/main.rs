@@ -1,6 +1,7 @@
 mod application;
 mod cli;
 mod config;
+mod info;
 mod pdf;
 mod workspace;
 
@@ -12,6 +13,7 @@ fn run() -> Result<()> {
     let cli = Cli::parse();
     let config_path = config::location(cli.config.as_deref())?;
     match cli.command {
+        Commands::Info => info::show(&config_path, cli.config.is_some())?,
         Commands::Init { path, master } => {
             let root = workspace::initialize(&path, master.as_deref(), &config_path)?;
             println!("Initialized {}", root.display());

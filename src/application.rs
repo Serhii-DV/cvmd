@@ -1,7 +1,7 @@
 use crate::config::{self, Config};
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Context, Result, ensure};
 use chrono::{Datelike, Local, NaiveDate};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{
     fs,
     io::ErrorKind,
@@ -9,10 +9,10 @@ use std::{
     process::Command,
 };
 
-#[derive(Serialize)]
-struct Identity<'a> {
-    company: &'a str,
-    position: &'a str,
+#[derive(Deserialize, Serialize)]
+pub struct Identity {
+    pub company: String,
+    pub position: String,
 }
 
 // ASCII-only components work on Windows, macOS and Linux. The exact Unicode
@@ -58,7 +58,10 @@ pub fn create(
             .with_context(|| format!("Cannot read job description {}", path.display()))?,
         None => Vec::new(),
     };
-    let identity = toml::to_string_pretty(&Identity { company, position })?;
+    let identity = toml::to_string_pretty(&Identity {
+        company: company.to_owned(),
+        position: position.to_owned(),
+    })?;
     let date = Local::now().date_naive();
     let parent = config
         .root
@@ -99,11 +102,25 @@ pub fn create(
 }
 
 pub fn locate(config: &Config) -> Result<PathBuf> {
-    let applications = config
-        .root
-        .join("applications")
-        .canonicalize()
-        .context("Cannot find applications directory; check the configured workspace")?;
+    let path = discover(config)?.context(
+        "Run this command from a dated application directory (or one of its subdirectories)",
+    )?;
+    ensure!(
+        path.join("cv.md").is_file(),
+        "Application CV is missing: {}",
+        path.join("cv.md").display()
+    );
+    Ok(path)
+}
+
+pub fn discover(config: &Config) -> Result<Option<PathBuf>> {
+    let applications = match config.root.join("applications").canonicalize() {
+        Ok(path) => path,
+        Err(error) if matches!(error.kind(), ErrorKind::NotFound | ErrorKind::NotADirectory) => {
+            return Ok(None);
+        }
+        Err(error) => return Err(error).context("Cannot resolve applications directory"),
+    };
     let current = std::env::current_dir()?.canonicalize()?;
     for path in current.ancestors() {
         let Ok(relative) = path.strip_prefix(&applications) else {
@@ -126,21 +143,13 @@ pub fn locate(config: &Config) -> Result<PathBuf> {
         {
             continue;
         }
-        ensure!(
-            path.join("cv.md").is_file(),
-            "Application CV is missing: {}",
-            path.join("cv.md").display()
-        );
-        return Ok(path.to_owned());
+        return Ok(Some(path.to_owned()));
     }
-    bail!("Run this command from a dated application directory (or one of its subdirectories)")
+    Ok(None)
 }
 
 pub fn edit(config: &Config, path: &Path) -> Result<()> {
-    let editor = std::env::var("EDITOR")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| config.editor.clone());
+    let (editor, _) = config.effective_editor();
     let arguments = shell_words::split(&editor).context("Invalid quoting in editor command")?;
     let (program, arguments) = arguments
         .split_first()

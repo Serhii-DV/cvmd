@@ -527,3 +527,254 @@ mod unix {
         );
     }
 }
+
+#[test]
+fn info_reports_resolved_configuration_without_changing_workspace_files() {
+    let workspace = Workspace::new();
+    workspace.configure("pdf", "renderer", "/nonexistent/cvmd-test-renderer");
+    let config_before = fs::read(&workspace.config).unwrap();
+    let report = success(
+        workspace
+            .command()
+            .env_remove("EDITOR")
+            .arg("info")
+            .output()
+            .unwrap(),
+    );
+    for (label, value) in [
+        ("Config:", workspace.config.display().to_string()),
+        ("Config source:", "--config".into()),
+        (
+            "Workspace:",
+            format!("{} [exists]", workspace.root.display()),
+        ),
+        (
+            "Master CV:",
+            format!("{} [exists]", workspace.root.join("master/cv.md").display()),
+        ),
+        (
+            "Stylesheet:",
+            format!(
+                "{} [exists]",
+                workspace.root.join("styles/cv.css").display()
+            ),
+        ),
+        ("Editor:", "micro [config]".into()),
+        (
+            "PDF renderer:",
+            "/nonexistent/cvmd-test-renderer [unavailable]".into(),
+        ),
+        ("Application:", "none".into()),
+    ] {
+        assert!(report.contains(&format!("{label:<15} {value}")), "{report}");
+    }
+    assert_eq!(fs::read(&workspace.config).unwrap(), config_before);
+    assert_eq!(
+        fs::read_dir(workspace.root.join("applications"))
+            .unwrap()
+            .count(),
+        0
+    );
+    assert_eq!(
+        fs::read(workspace.root.join("master/cv.md")).unwrap(),
+        include_bytes!("fixtures/cv.md")
+    );
+}
+
+#[test]
+fn info_shows_selected_config_before_missing_or_invalid_config_errors() {
+    let workspace = Workspace::empty();
+    let output = workspace.command().arg("info").output().unwrap();
+    let report = String::from_utf8_lossy(&output.stdout);
+    assert!(report.contains(workspace.config.to_str().unwrap()));
+    assert!(report.contains("[missing]"));
+    failure(output, "run `cvmd init <path>` first");
+    assert!(!workspace.config.exists());
+    assert!(!workspace.root.exists());
+    fs::create_dir_all(workspace.config.parent().unwrap()).unwrap();
+    fs::write(&workspace.config, "root = [").unwrap();
+    let output = workspace.command().arg("info").output().unwrap();
+    assert!(String::from_utf8_lossy(&output.stdout).contains(workspace.config.to_str().unwrap()));
+    failure(output, "Invalid configuration");
+}
+
+#[test]
+fn info_reports_missing_files_and_workspace_without_failing() {
+    let workspace = Workspace::new();
+    workspace.configure("", "root", "../CV workspace with spaces");
+    fs::remove_file(workspace.root.join("master/cv.md")).unwrap();
+    fs::remove_file(workspace.root.join("styles/cv.css")).unwrap();
+    let report = success(workspace.command().arg("info").output().unwrap());
+    for relative in ["master/cv.md", "styles/cv.css"] {
+        assert!(
+            report.contains(&format!(
+                "{} [missing]",
+                workspace
+                    .config
+                    .parent()
+                    .unwrap()
+                    .join("../CV workspace with spaces")
+                    .join(relative)
+                    .display()
+            )),
+            "{report}"
+        );
+    }
+    fs::remove_dir_all(&workspace.root).unwrap();
+    success(workspace.command().arg("info").output().unwrap());
+    fs::write(&workspace.root, "not a directory").unwrap();
+    let report = success(workspace.command().arg("info").output().unwrap());
+    assert!(report.contains("[not a directory]"));
+}
+
+#[test]
+fn info_uses_the_effective_editor_and_identifies_its_source() {
+    let workspace = Workspace::new();
+    workspace.configure("", "editor", "configured-editor --wait");
+    let report = success(
+        workspace
+            .command()
+            .env("EDITOR", "environment-editor --wait")
+            .arg("info")
+            .output()
+            .unwrap(),
+    );
+    assert!(report.contains("environment-editor --wait [$EDITOR]"));
+    let report = success(
+        workspace
+            .command()
+            .env("EDITOR", "  ")
+            .arg("info")
+            .output()
+            .unwrap(),
+    );
+    assert!(report.contains("configured-editor --wait [config]"));
+    let mut config: toml::Value =
+        toml::from_str(&fs::read_to_string(&workspace.config).unwrap()).unwrap();
+    config.as_table_mut().unwrap().remove("editor");
+    fs::write(&workspace.config, toml::to_string_pretty(&config).unwrap()).unwrap();
+    let report = success(
+        workspace
+            .command()
+            .env_remove("EDITOR")
+            .arg("info")
+            .output()
+            .unwrap(),
+    );
+    assert!(report.contains("micro [default]"));
+}
+
+#[test]
+fn info_identifies_nested_applications_and_preserves_exact_names() {
+    let workspace = Workspace::new();
+    let company = "ACME / R&D: 北欧 A/S";
+    let position = "Senior PHP/TS Developer™";
+    let application = workspace.application(company, position);
+    let nested = application.join("attachments");
+    fs::create_dir(&nested).unwrap();
+    // Diagnostics should still identify an application whose CV was removed.
+    fs::remove_file(application.join("cv.md")).unwrap();
+    let report = success(
+        workspace
+            .command()
+            .current_dir(&nested)
+            .arg("info")
+            .output()
+            .unwrap(),
+    );
+    assert!(report.contains(&format!("{:<15} {}", "Application:", application.display())));
+    assert!(report.contains(&format!("{:<15} {company}", "Company:")));
+    assert!(report.contains(&format!("{:<15} {position}", "Position:")));
+    fs::remove_file(application.join("application.toml")).unwrap();
+    let report = success(
+        workspace
+            .command()
+            .current_dir(&nested)
+            .arg("info")
+            .output()
+            .unwrap(),
+    );
+    assert!(report.contains("Identity:") && report.contains("Cannot read"));
+    assert!(report.contains(application.to_str().unwrap()));
+    fs::write(application.join("application.toml"), "company = [").unwrap();
+    let report = success(
+        workspace
+            .command()
+            .current_dir(nested)
+            .arg("info")
+            .output()
+            .unwrap(),
+    );
+    assert!(report.contains("Invalid identity"));
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn info_reports_default_config_selection() {
+    let workspace = Workspace::empty();
+    let config_directory = workspace.temp.path().join("user-config");
+    let config = config_directory.join("cvmd/config.toml");
+    fs::create_dir_all(config.parent().unwrap()).unwrap();
+    fs::write(
+        &config,
+        format!("root = {:?}\n", workspace.root.to_str().unwrap()),
+    )
+    .unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_cvmd"))
+        .current_dir(workspace.temp.path())
+        .env("XDG_CONFIG_HOME", &config_directory)
+        .env_remove("EDITOR")
+        .arg("info")
+        .output()
+        .unwrap();
+    let report = success(output);
+    assert!(report.contains(config.to_str().unwrap()));
+    assert!(report.contains(&format!("{:<15} default", "Config source:")));
+    assert!(report.contains("micro [default]"));
+}
+
+#[cfg(unix)]
+#[test]
+fn info_checks_renderer_executability_without_launching_it() {
+    use std::os::unix::fs::PermissionsExt;
+    let workspace = Workspace::new();
+    let application = workspace.application("ACME", "Developer");
+    let marker = application.join("executed");
+    let renderer = application.join("test-renderer");
+    fs::write(&renderer, "#!/bin/sh\ntouch executed\nexit 1\n").unwrap();
+    fs::set_permissions(&renderer, fs::Permissions::from_mode(0o755)).unwrap();
+    workspace.configure("pdf", "renderer", "test-renderer");
+    let report = success(
+        workspace
+            .command()
+            .env("PATH", &application)
+            .arg("info")
+            .output()
+            .unwrap(),
+    );
+    assert!(report.contains("test-renderer [available]"));
+    assert!(!marker.exists());
+    workspace.configure("pdf", "renderer", renderer.to_str().unwrap());
+    let report = success(workspace.command().arg("info").output().unwrap());
+    assert!(report.contains(&format!("{} [available]", renderer.display())));
+    let nested = application.join("attachments");
+    fs::create_dir(&nested).unwrap();
+    workspace.configure("pdf", "renderer", "./test-renderer");
+    let report = success(
+        workspace
+            .command()
+            .current_dir(&nested)
+            .arg("info")
+            .output()
+            .unwrap(),
+    );
+    assert!(report.contains("./test-renderer [available]"));
+    workspace.configure("pdf", "renderer", renderer.to_str().unwrap());
+    fs::set_permissions(&renderer, fs::Permissions::from_mode(0o644)).unwrap();
+    let report = success(workspace.command().arg("info").output().unwrap());
+    assert!(report.contains(&format!("{} [unavailable]", renderer.display())));
+    workspace.configure("pdf", "renderer", application.to_str().unwrap());
+    let report = success(workspace.command().arg("info").output().unwrap());
+    assert!(report.contains(&format!("{} [unavailable]", application.display())));
+    assert!(!marker.exists());
+}

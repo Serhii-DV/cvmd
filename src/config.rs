@@ -11,8 +11,8 @@ pub struct Config {
     pub root: PathBuf,
     #[serde(default = "default_master")]
     pub master: PathBuf,
-    #[serde(default = "default_editor")]
-    pub editor: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub editor: Option<String>,
     #[serde(default)]
     pub pdf: PdfConfig,
 }
@@ -83,7 +83,7 @@ impl Config {
         Self {
             root,
             master: default_master(),
-            editor: default_editor(),
+            editor: Some(default_editor()),
             pdf: PdfConfig::default(),
         }
     }
@@ -126,5 +126,17 @@ impl Config {
 
     pub fn resolve(&self, path: &Path) -> Result<PathBuf> {
         absolute(path, &self.root)
+    }
+
+    pub fn effective_editor(&self) -> (String, &'static str) {
+        if let Ok(editor) = std::env::var("EDITOR")
+            && !editor.trim().is_empty()
+        {
+            return (editor, "$EDITOR");
+        }
+        match &self.editor {
+            Some(editor) => (editor.clone(), "config"),
+            None => (default_editor(), "default"),
+        }
     }
 }

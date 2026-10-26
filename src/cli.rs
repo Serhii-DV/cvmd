@@ -13,6 +13,8 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    /// Show the active configuration, workspace, tools and current application
+    Info,
     /// Initialize a CV workspace and save its location
     Init {
         path: PathBuf,

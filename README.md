@@ -81,6 +81,22 @@ You can also edit all Markdown and TOML files directly without the CLI.
 
 ## Configuration
 
+Run `cvmd info` to inspect the active config file, its selection source, resolved
+workspace/master/stylesheet paths and existence, effective editor and its source,
+and PDF renderer availability. Inside an application (including subdirectories),
+it also shows the application path and original company/position names.
+
+```sh
+cvmd info
+cvmd --config /path/to/config.toml info
+```
+
+This command is read-only and does not launch the editor or renderer. Missing or
+invalid configuration prints the selected config path and an actionable error,
+then exits unsuccessfully. Missing workspace files and unavailable renderers are
+reported without failing; missing or invalid application metadata leaves the rest
+of the report available.
+
 `init` saves the workspace location in the OS configuration directory:
 
 - Linux/WSL: `$XDG_CONFIG_HOME/cvmd/config.toml`, or `~/.config/cvmd/config.toml`.
@@ -134,5 +150,5 @@ Integration tests use isolated workspaces and stub editor/renderer executables,
 so the test suite does not require Chromium or open an editor. Process integration
 tests using shell scripts run on Unix. CI runs the checks above on Linux.
 
-The MVP includes `init`, `new`, `edit`, and `build`. Listing, filtering, bulk builds,
+The MVP includes `init`, `new`, `edit`, `build`, and `info`. Listing, filtering, bulk builds,
 application tracking, multiple templates, and AI integration are deferred.

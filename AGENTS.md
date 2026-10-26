@@ -52,6 +52,12 @@ commit convention is established. Write concise, action-oriented subjects. Keep
 PRs focused, describe resulting behavior, link relevant issues, and report validation.
 Update the README for CLI or configuration changes.
 
+## Changelog
+
+Maintain `CHANGELOG.md` at the repository root. Add compact, user-facing bullets
+under `Unreleased`, grouped by `Added`, `Changed`, `Fixed`, or `Removed`. Mention
+breaking changes and required migration steps. Avoid implementation logs.
+
 ## Data & Configuration Safety
 
 Keep personal CVs outside this repository and use synthetic fixtures. Preserve

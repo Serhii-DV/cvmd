@@ -1,7 +1,7 @@
 use crate::config::Config;
 use anyhow::{Context, Result, ensure};
 use std::{
-    fs::File,
+    fs::{self, File},
     io::Read,
     path::{Path, PathBuf},
     process::{Command, Stdio},
@@ -9,7 +9,7 @@ use std::{
 
 pub fn build(config: &Config, application: &Path, verbose: bool) -> Result<PathBuf> {
     let markdown = application.join("cv.md");
-    let destination = config.pdf.output_path(&markdown);
+    let destination = config.pdf.output_path(&markdown)?;
     let stylesheet = config.resolve(&config.pdf.stylesheet)?;
     let resolved_stylesheet = stylesheet.canonicalize();
     if verbose {
@@ -27,7 +27,14 @@ pub fn build(config: &Config, application: &Path, verbose: bool) -> Result<PathB
         .with_context(|| format!("Cannot find shared stylesheet {}", stylesheet.display()))?;
     ensure!(stylesheet.is_file(), "Shared stylesheet is not a file");
     let source = File::open(&markdown).context("Cannot read application CV")?;
-    let mut temporary = tempfile::NamedTempFile::new_in(application)?;
+    let output_directory = destination.parent().context("PDF output has no parent")?;
+    fs::create_dir_all(output_directory).with_context(|| {
+        format!(
+            "Cannot create PDF output directory {}",
+            output_directory.display()
+        )
+    })?;
+    let mut temporary = tempfile::NamedTempFile::new_in(output_directory)?;
     // md-to-pdf's stdin/stdout mode lets us publish only successful renders.
     // File-backed streams also avoid pipe deadlocks with large CVs/PDFs.
     let status = Command::new(&config.pdf.renderer)

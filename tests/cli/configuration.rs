@@ -716,12 +716,12 @@ fn verbose_build_reports_local_config_and_the_actual_markdown_and_external_style
                 workspace.config.display(),
                 application.join("cv.md").display(),
                 stylesheet.canonicalize().unwrap().display(),
-                application.join("cv.pdf").display()
+                application.join("output/cv.pdf").display()
             )
         );
         assert_eq!(
             success(output),
-            format!("Built {}", application.join("cv.pdf").display())
+            format!("Built {}", application.join("output/cv.pdf").display())
         );
         assert_eq!(
             fs::read_to_string(&input).unwrap(),
@@ -746,7 +746,7 @@ fn verbose_build_reports_local_config_and_the_actual_markdown_and_external_style
     assert!(normal.stderr.is_empty());
     assert_eq!(
         success(normal),
-        format!("Built {}", application.join("cv.pdf").display())
+        format!("Built {}", application.join("output/cv.pdf").display())
     );
     assert_eq!(
         fs::read_to_string(&source).unwrap(),
@@ -762,7 +762,8 @@ fn verbose_build_reports_local_config_and_the_actual_markdown_and_external_style
 fn verbose_build_reports_attempted_paths_when_stylesheet_or_config_is_missing() {
     let workspace = local_workspace();
     let application = workspace.application("ACME", "Developer");
-    let pdf = application.join("cv.pdf");
+    fs::create_dir(application.join("output")).unwrap();
+    let pdf = application.join("output/cv.pdf");
     fs::write(&pdf, "%PDF-1.7 previous").unwrap();
     workspace.configure(
         "pdf",
@@ -854,7 +855,7 @@ fn configured_tools_edit_and_build_with_discovered_workspace_config() {
         application.join("cv.md").canonicalize().unwrap()
     );
     assert_eq!(
-        fs::read(application.join("cv.pdf")).unwrap(),
+        fs::read(application.join("output/cv.pdf")).unwrap(),
         b"%PDF-1.7 local"
     );
 }

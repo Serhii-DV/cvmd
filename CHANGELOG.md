@@ -4,7 +4,7 @@
 
 ### Added
 
-- Optional `[pdf] filename` selects a PDF name within each application directory.
+- Optional `[pdf] filename` selects a PDF name within each application's `output/` directory.
   Omit it to use the Markdown stem with `.pdf`. The setting supports config
   read/write/unset commands, and verbose builds show the PDF output path.
 - `build --verbose` (`-v`) reports the selected config, application Markdown, and
@@ -24,6 +24,10 @@
 
 ### Changed
 
+- PDF builds now write to an application's `output/` subfolder, created on
+  demand, for both default and custom filenames. Existing PDFs beside the Markdown
+  stay in place; update scripts that expect PDFs directly in application folders.
+  Relative images still resolve from the application directory.
 - New workspaces put the CV and shared stylesheet together in `assets/cv.md` and
   `assets/cv.css`. CV imports use `init --source FILE`; the CV input setting is
   `source`, including `config source` and the `Source CV` label in `info`.

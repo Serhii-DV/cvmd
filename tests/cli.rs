@@ -405,7 +405,7 @@ fn bare_edit_and_build_show_help_inside_and_outside_applications_without_running
             assert_eq!(success(output), expected);
         }
     }
-    assert!(!application.join("cv.pdf").exists());
+    assert!(!application.join("output/cv.pdf").exists());
     assert_eq!(fs::read(&workspace.config).unwrap(), config_before);
     assert_eq!(
         fs::read(application.join("cv.md")).unwrap(),
@@ -556,6 +556,7 @@ mod unix {
     fn renderer_receives_shared_styles_and_cv_and_failures_preserve_previous_pdf() {
         let workspace = Workspace::new();
         let application = workspace.application("ACME", "Developer");
+        assert!(!application.join("output").exists());
         let renderer = executable(
             &workspace,
             "PDF renderer",
@@ -584,7 +585,7 @@ mod unix {
         );
         assert_eq!(fs::read(input).unwrap(), include_bytes!("fixtures/cv.md"));
         assert_eq!(
-            fs::read(application.join("cv.pdf")).unwrap(),
+            fs::read(application.join("output/cv.pdf")).unwrap(),
             b"%PDF-1.7 mock"
         );
         let failing = executable(
@@ -624,7 +625,7 @@ mod unix {
             "Cannot start PDF renderer",
         );
         assert_eq!(
-            fs::read(application.join("cv.pdf")).unwrap(),
+            fs::read(application.join("output/cv.pdf")).unwrap(),
             b"%PDF-1.7 mock"
         );
         assert_eq!(
@@ -632,6 +633,7 @@ mod unix {
             include_bytes!("fixtures/cv.md")
         );
         assert_eq!(fs::read_dir(&application).unwrap().count(), 5);
+        assert_eq!(fs::read_dir(application.join("output")).unwrap().count(), 1);
         fs::remove_file(workspace.root.join("assets/cv.css")).unwrap();
         failure(
             workspace
@@ -1070,10 +1072,10 @@ mod alias_selection {
                 .unwrap(),
         );
         assert_eq!(
-            fs::read(application.join("cv.pdf")).unwrap(),
+            fs::read(application.join("output/cv.pdf")).unwrap(),
             b"%PDF-1.7 mock"
         );
-        assert!(!unrelated.join("cv.pdf").exists());
+        assert!(!unrelated.join("output/cv.pdf").exists());
     }
 
     #[test]
@@ -1131,9 +1133,12 @@ mod alias_selection {
         let mut command = workspace.command();
         command.args(["build", "software_engineer"]);
         let report = success(with_input(command, "1\n"));
-        assert!(report.contains(newest.join("cv.pdf").to_str().unwrap()));
-        assert_eq!(fs::read(newest.join("cv.pdf")).unwrap(), b"%PDF-1.7 mock");
-        assert!(!oldest.join("cv.pdf").exists());
+        assert!(report.contains(newest.join("output/cv.pdf").to_str().unwrap()));
+        assert_eq!(
+            fs::read(newest.join("output/cv.pdf")).unwrap(),
+            b"%PDF-1.7 mock"
+        );
+        assert!(!oldest.join("output/cv.pdf").exists());
     }
 
     #[test]
@@ -1156,8 +1161,8 @@ mod alias_selection {
                     .env("CAPTURE", &capture);
                 failure(with_input(command, input), message);
                 assert!(!capture.exists());
-                assert!(!first.join("cv.pdf").exists());
-                assert!(!second.join("cv.pdf").exists());
+                assert!(!first.join("output/cv.pdf").exists());
+                assert!(!second.join("output/cv.pdf").exists());
             }
         }
     }
@@ -1206,7 +1211,7 @@ mod alias_selection {
         );
         assert!(report.contains(application.to_str().unwrap()));
         assert_eq!(
-            fs::read(application.join("cv.pdf")).unwrap(),
+            fs::read(application.join("output/cv.pdf")).unwrap(),
             b"%PDF-1.7 mock"
         );
     }

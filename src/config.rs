@@ -78,11 +78,13 @@ impl PdfConfig {
         Ok(())
     }
 
-    pub fn output_path(&self, markdown: &Path) -> PathBuf {
-        match &self.filename {
+    pub fn output_path(&self, markdown: &Path) -> Result<PathBuf> {
+        let output = match &self.filename {
             Some(filename) => markdown.with_file_name(filename),
             None => markdown.with_extension("pdf"),
-        }
+        };
+        let filename = output.file_name().context("PDF output has no file name")?;
+        Ok(markdown.with_file_name("output").join(filename))
     }
 }
 

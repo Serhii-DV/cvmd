@@ -12,6 +12,9 @@ Install a current stable Rust toolchain, then run from this repository:
 cargo install --path . --locked
 ```
 
+With Make installed, `make build` runs the same command to build and install
+`cvmd` into Cargo's binary directory. Run `make` or `make help` to list targets.
+
 PDF generation uses [md-to-pdf](https://github.com/simonhaenisch/md-to-pdf), installed
 separately with Node.js and its Chromium dependencies:
 

@@ -4,6 +4,8 @@
 
 ### Added
 
+- `make build` builds and installs `cvmd` with `cargo install --path . --locked`;
+  `make` and `make help` list available targets.
 - `edit [ALIAS]` and `build [ALIAS]` find applications by company or position alias,
   with numbered selection when several match. `info` displays the aliases.
 - `cvmd info` reports the active configuration, workspace paths, editor source,

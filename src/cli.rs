@@ -18,7 +18,7 @@ pub enum Commands {
     Info,
     /// Read or change configuration values
     #[command(
-        after_help = "Examples:\n  cvmd config source\n  cvmd config --local source ~/Documents/my-cv.md\n  cvmd config pdf.renderer md-to-pdf\n  cvmd config pdf.filename 'My CV.pdf'\n  cvmd config --list\n  cvmd config --unset editor\n\nKeys: root, source, editor, pdf.renderer, pdf.stylesheet, pdf.filename"
+        after_help = "Examples:\n  cvmd config source\n  cvmd config --local source ~/Documents/my-cv.md\n  cvmd config pdf.renderer md-to-pdf\n  cvmd config pdf.filename 'My CV.pdf'\n  cvmd config --list\n  cvmd config --unset editor\n\nKeys: root, source, editor, pdf.renderer, pdf.config_file, pdf.filename"
     )]
     Config(ConfigArgs),
     /// Initialize a CV workspace with its own cvmd.toml
@@ -49,7 +49,7 @@ pub enum Commands {
     Build {
         /// Exact company or position alias; omit to show help
         alias: Option<String>,
-        /// Show the active config, Markdown, stylesheet and PDF paths on stderr
+        /// Show the active config, Markdown, renderer config and PDF paths on stderr
         #[arg(short, long)]
         verbose: bool,
     },
@@ -69,7 +69,7 @@ pub struct ConfigArgs {
     /// Remove a setting, restoring its default
     #[arg(long, requires = "key", conflicts_with_all = ["list", "get", "value"])]
     pub unset: bool,
-    /// Setting name, such as source or pdf.stylesheet
+    /// Setting name, such as source or pdf.config_file
     pub key: Option<String>,
     /// New string value; quote paths or commands containing spaces
     #[arg(requires = "key")]

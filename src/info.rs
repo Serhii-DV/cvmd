@@ -94,8 +94,8 @@ pub fn show(config_path: &Path, config_source: &str) -> Result<()> {
     print_path("Workspace:", &config.root, true);
     print_path("Source CV:", &config.resolve(&config.source)?, false);
     print_path(
-        "Stylesheet:",
-        &config.resolve(&config.pdf.stylesheet)?,
+        "Renderer config:",
+        &config.resolve(&config.pdf.config_file)?,
         false,
     );
     let (editor, source) = config.effective_editor();

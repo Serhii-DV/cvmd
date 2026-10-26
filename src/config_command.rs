@@ -8,7 +8,7 @@ const KEYS: &[&str] = &[
     "source",
     "editor",
     "pdf.renderer",
-    "pdf.stylesheet",
+    "pdf.config_file",
     "pdf.filename",
 ];
 

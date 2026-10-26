@@ -113,7 +113,9 @@ fn initializes_and_refuses_to_overwrite_configuration_or_source() {
         fs::read(workspace.root.join("assets/cv.md")).unwrap(),
         include_bytes!("fixtures/cv.md")
     );
-    assert!(workspace.root.join("assets/cv.css").is_file());
+    for asset in ["cv.css", "columns.css", "pdf.config.js"] {
+        assert!(workspace.root.join("assets").join(asset).is_file());
+    }
     let original_config = fs::read(&workspace.config).unwrap();
     fs::write(workspace.root.join("assets/cv.md"), "edited source").unwrap();
     failure(
@@ -133,11 +135,17 @@ fn initializes_and_refuses_to_overwrite_configuration_or_source() {
 }
 
 #[test]
-fn initializing_existing_workspace_preserves_cv_and_css() {
+fn initializing_existing_workspace_preserves_cv_styles_and_renderer_config() {
     let workspace = Workspace::empty();
     fs::create_dir_all(workspace.root.join("assets")).unwrap();
     fs::write(workspace.root.join("assets/cv.md"), "my CV").unwrap();
     fs::write(workspace.root.join("assets/cv.css"), "my CSS").unwrap();
+    fs::write(workspace.root.join("assets/columns.css"), "my columns CSS").unwrap();
+    fs::write(
+        workspace.root.join("assets/pdf.config.js"),
+        "module.exports = { pdf_options: { format: 'Letter' } };",
+    )
+    .unwrap();
     success(
         workspace
             .command()
@@ -153,6 +161,14 @@ fn initializing_existing_workspace_preserves_cv_and_css() {
     assert_eq!(
         fs::read_to_string(workspace.root.join("assets/cv.css")).unwrap(),
         "my CSS"
+    );
+    assert_eq!(
+        fs::read_to_string(workspace.root.join("assets/columns.css")).unwrap(),
+        "my columns CSS"
+    );
+    assert_eq!(
+        fs::read_to_string(workspace.root.join("assets/pdf.config.js")).unwrap(),
+        "module.exports = { pdf_options: { format: 'Letter' } };"
     );
 }
 
@@ -433,7 +449,7 @@ mod unix {
     }
 
     #[test]
-    fn expands_home_in_workspace_source_and_stylesheet_paths() {
+    fn expands_home_in_workspace_source_and_renderer_config_paths() {
         let workspace = Workspace::new();
         workspace.configure("", "root", "~/CV workspace with spaces");
         workspace.configure("", "source", "~/CV workspace with spaces/assets/cv.md");
@@ -448,8 +464,8 @@ mod unix {
         assert!(path.starts_with(&workspace.root));
         workspace.configure(
             "pdf",
-            "stylesheet",
-            "~/CV workspace with spaces/assets/cv.css",
+            "config_file",
+            "~/CV workspace with spaces/assets/pdf.config.js",
         );
         let renderer = executable(
             &workspace,
@@ -553,8 +569,16 @@ mod unix {
     }
 
     #[test]
-    fn renderer_receives_shared_styles_and_cv_and_failures_preserve_previous_pdf() {
+    fn renderer_receives_default_config_and_cv_and_failures_preserve_previous_pdf() {
         let workspace = Workspace::new();
+        // An omitted config_file still selects the default JavaScript config.
+        success(
+            workspace
+                .command()
+                .args(["config", "--unset", "pdf.config_file"])
+                .output()
+                .unwrap(),
+        );
         let application = workspace.application("ACME", "Developer");
         assert!(!application.join("output").exists());
         let renderer = executable(
@@ -578,8 +602,8 @@ mod unix {
         assert_eq!(
             fs::read_to_string(arguments).unwrap(),
             format!(
-                "--stylesheet\n{}\n--basedir\n{}\n",
-                workspace.root.join("assets/cv.css").display(),
+                "--config-file\n{}\n--basedir\n{}\n",
+                workspace.root.join("assets/pdf.config.js").display(),
                 application.display()
             )
         );
@@ -634,7 +658,7 @@ mod unix {
         );
         assert_eq!(fs::read_dir(&application).unwrap().count(), 5);
         assert_eq!(fs::read_dir(application.join("output")).unwrap().count(), 1);
-        fs::remove_file(workspace.root.join("assets/cv.css")).unwrap();
+        fs::remove_file(workspace.root.join("assets/pdf.config.js")).unwrap();
         failure(
             workspace
                 .command()
@@ -642,7 +666,7 @@ mod unix {
                 .args(["build", "acme"])
                 .output()
                 .unwrap(),
-            "Cannot find shared stylesheet",
+            "Cannot find renderer config",
         );
     }
 }
@@ -672,10 +696,10 @@ fn info_reports_resolved_configuration_without_changing_workspace_files() {
             format!("{} [exists]", workspace.root.join("assets/cv.md").display()),
         ),
         (
-            "Stylesheet:",
+            "Renderer config:",
             format!(
                 "{} [exists]",
-                workspace.root.join("assets/cv.css").display()
+                workspace.root.join("assets/pdf.config.js").display()
             ),
         ),
         ("Editor:", "micro [config]".into()),
@@ -723,8 +747,9 @@ fn info_reports_missing_files_and_workspace_without_failing() {
     workspace.configure("", "root", "../CV workspace with spaces");
     fs::remove_file(workspace.root.join("assets/cv.md")).unwrap();
     fs::remove_file(workspace.root.join("assets/cv.css")).unwrap();
+    fs::remove_file(workspace.root.join("assets/pdf.config.js")).unwrap();
     let report = success(workspace.command().arg("info").output().unwrap());
-    for relative in ["assets/cv.md", "assets/cv.css"] {
+    for relative in ["assets/cv.md", "assets/pdf.config.js"] {
         assert!(
             report.contains(&format!(
                 "{} [missing]",

@@ -51,7 +51,9 @@ and creates empty notes. Applications use the local date and time:
 ├── cvmd.toml
 ├── assets/
 │   ├── cv.md
-│   └── cv.css
+│   ├── cv.css
+│   ├── columns.css
+│   └── pdf.config.js
 └── applications/
     └── 2026/
         └── 10/
@@ -116,7 +118,7 @@ derives their aliases from valid `application.toml` metadata.
 ## Configuration
 
 Run `cvmd info` to inspect the active config file, its selection source, resolved
-workspace/source/stylesheet paths and existence, effective editor and its source,
+workspace/source/renderer config paths and existence, effective editor and its source,
 and PDF renderer availability. Inside an application (including subdirectories),
 it also shows the application path, searchable aliases, and original company/position names.
 
@@ -154,7 +156,7 @@ workspace, supply `--config` on each invocation or use an existing legacy config
 `init` always targets the workspace being initialized, regardless of the current
 directory's configuration. It refuses to replace an existing config. An explicit
 `--config` with `init` writes to that path instead of creating `cvmd.toml`. When
-initializing an existing workspace, it preserves the source CV and CSS; an explicit
+initializing an existing workspace, it preserves the source CV, CSS, and renderer config; an explicit
 `--source` import fails if `assets/cv.md` already exists.
 
 ```toml
@@ -164,17 +166,20 @@ editor = "micro"
 
 [pdf]
 renderer = "md-to-pdf"
-stylesheet = "assets/cv.css"
+config_file = "assets/pdf.config.js"
 # filename = "Jane Doe CV.pdf"  # optional; otherwise use the Markdown stem
 ```
 
+`pdf.config_file` defaults to `assets/pdf.config.js` and selects the JavaScript
+config that defines stylesheets, PDF options, and Markdown extensions.
+
 `~` and `~/…` are expanded in configuration paths. Relative `root` paths resolve
-against the configuration file's directory; relative source and stylesheet paths
+against the configuration file's directory; relative source and renderer config paths
 resolve against the workspace root. Input `--source` and `--job` paths resolve
 against the command's current directory.
 
 New local configs use `root = "."`, so moving the whole workspace keeps its
-relative CV and stylesheet paths working. Absolute paths to external files still
+relative CV and renderer config paths working. Absolute paths to external files still
 refer to those external locations.
 
 ### Read and change settings
@@ -188,7 +193,7 @@ cvmd config --get source                   # explicit read
 cvmd config source ~/Documents/my-cv.md     # use an external CV for new applications
 cvmd config --local source ~/Documents/my-cv.md  # require the current workspace config
 cvmd config editor 'code --wait'
-cvmd config pdf.stylesheet assets/custom.css
+cvmd config pdf.config_file assets/custom-pdf.config.js
 cvmd config --local pdf.filename 'Jane Doe CV.pdf'
 cvmd config --unset editor                 # restore the default
 ```
@@ -202,7 +207,7 @@ first, then use `cvmd config --local KEY VALUE`. Without `--local`, the normal
 selection order above applies. `--local` cannot be combined with `--config FILE`;
 use `--config FILE` to target a specific config from anywhere.
 
-Supported keys are `root`, `source`, `editor`, `pdf.renderer`, `pdf.stylesheet`,
+Supported keys are `root`, `source`, `editor`, `pdf.renderer`, `pdf.config_file`,
 and `pdf.filename`.
 Values are strings; quote values containing spaces. Reads show stored values,
 without expanding paths or applying `$EDITOR`; `--list` shows supported keys
@@ -210,9 +215,10 @@ present in the file as `key=value`. Reading or unsetting an absent key fails.
 Bare `cvmd config` shows help. Use `cvmd info` to see resolved paths and defaults.
 
 `--unset` restores the default for `source` (`assets/cv.md`), `editor` (`micro`),
-`pdf.renderer` (`md-to-pdf`), or `pdf.stylesheet` (`assets/cv.css`). Unsetting
-`pdf.filename` restores the name derived from the Markdown file. The required
-`root` setting cannot be unset. Empty values, unknown keys, and invalid editor
+`pdf.renderer` (`md-to-pdf`), or `pdf.config_file` (`assets/pdf.config.js`).
+Unsetting `pdf.filename` restores the name derived from the Markdown file.
+The required `root` setting cannot be unset.
+Empty values, unknown keys, and invalid editor
 quoting are rejected. Changes preserve comments and unrelated settings and are
 written atomically to the selected file. Config commands require an existing file;
 they do not initialize a workspace.
@@ -226,7 +232,7 @@ of the source into `assets/cv.md`.
 `$EDITOR` takes precedence over `editor`. Editor commands accept quoted paths and
 arguments, for example `editor = "code --wait"`; they run directly without a shell.
 `pdf.renderer` is one executable name or absolute path, with no inline arguments.
-It must support md-to-pdf's stdin/stdout mode and `--stylesheet` / `--basedir` flags.
+It must support md-to-pdf's stdin/stdout mode, `--basedir`, and `--config-file`.
 
 ### Existing workspaces
 
@@ -240,23 +246,86 @@ cvmd info
 ```
 
 This also corrects any `root` that was relative to the old config directory. Source
-and stylesheet paths remain relative to the same workspace. Keep the old config
+and renderer config paths remain relative to the same workspace. Keep the old config
 if you still want its fallback outside the workspace. Alternatively, run
 `cvmd init ~/CVs` without `--source` to add a config with default settings. It
-preserves existing `assets/cv.md`, `assets/cv.css`, and applications, and creates
+preserves existing CVs, stylesheets, renderer configs, and applications, and creates
 missing asset files from the bundled templates.
 
 ## PDF styling
 
 Use `cvmd build --verbose ALIAS` (or `-v`) to print the selected config file and
-the absolute Markdown, stylesheet, and PDF output paths to stderr. Normal output
+the absolute Markdown, renderer config, and PDF output paths to stderr. Normal output
 still prints `Built …`. Diagnostics include the config selection source and attempted input
-paths, including when a configured stylesheet is missing.
+paths, including when the renderer config is missing.
 
 `build` renders the selected application's `cv.md`, including your tailored edits.
 The configured `source` is copied only when `new` creates an application; changing
-it does not replace an existing application's CV. `pdf.stylesheet` is resolved
-from the active config on every build, including paths outside the workspace.
+it does not replace an existing application's CV. The renderer config path is
+resolved on every build, including paths outside the workspace.
+
+### Renderer configuration and columns
+
+New workspaces include `assets/pdf.config.js` and `assets/columns.css`
+beside `assets/cv.css`. These shared rendering assets belong together in `assets/`;
+they are copied once by `init`, rather than into every application. Existing files
+are preserved. If the rendering assets grow, group the config and both stylesheets
+under `assets/pdf/` and update `pdf.config_file`.
+
+`build` passes the absolute `pdf.config_file` path to md-to-pdf using
+`--config-file`. The JavaScript config controls all stylesheets, PDF options, and
+Marked extensions.
+
+The bundled config resolves its CSS paths using `__dirname`, so rendering works
+from any application directory and after moving the workspace. When writing your
+own JavaScript config, resolve local CSS paths relative to that file as well:
+
+```js
+const { resolve } = require("node:path");
+
+module.exports = {
+  stylesheet: [resolve(__dirname, "cv.css"), resolve(__dirname, "columns.css")],
+  pdf_options: { format: "A4", margin: "10mm", printBackground: true },
+  // Keep the bundled marked_extensions to enable the column syntax below.
+};
+```
+
+Set a custom renderer config with:
+
+```sh
+cvmd config pdf.config_file assets/custom-pdf.config.js
+cvmd build acme_r_d_a_s
+```
+
+For existing workspaces, copy `assets/pdf.config.js` and `assets/columns.css`
+from this repository beside your workspace's `assets/cv.css`, then set
+`pdf.config_file` as above (using `assets/pdf.config.js` for the bundled file).
+If your CSS has an `@page` margin, remove that declaration to let the config's
+10 mm margin take effect. Every build requires a renderer config file. Omitting
+or unsetting `pdf.config_file` selects `assets/pdf.config.js`.
+
+The bundled Marked extensions support two columns containing ordinary Markdown:
+
+```markdown
+:::: columns
+::: left-column
+## Experience
+- PHP and TypeScript development
+:::
+::: right-column
+## Skills
+- Rust
+:::
+::::
+```
+
+The outer fence uses four colons; the inner fences use three. Each fence must be
+on its own line. Use `pdf_options` for paper size and margins and CSS for layout,
+fonts, and spacing. Keep renderer output on stdout (`dest` unset) so `cvmd` can
+publish successful PDFs safely; JSON configs are supported by md-to-pdf too,
+but the bundled Marked extension functions require JavaScript.
+
+### PDF output
 
 `build` creates an `output/` subdirectory inside the selected application and
 saves its PDFs there. The PDF uses the Markdown file's stem by default:

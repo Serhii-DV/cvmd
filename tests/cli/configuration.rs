@@ -30,7 +30,20 @@ fn init_creates_portable_local_config_and_allows_independent_workspaces() {
         toml::from_str(&fs::read_to_string(&workspace.config).unwrap()).unwrap();
     assert_eq!(config["root"].as_str(), Some("."));
     assert_eq!(config["source"].as_str(), Some("assets/cv.md"));
-    assert_eq!(config["pdf"]["stylesheet"].as_str(), Some("assets/cv.css"));
+    assert!(config["pdf"].get("stylesheet").is_none());
+    assert_eq!(
+        config["pdf"]["config_file"].as_str(),
+        Some("assets/pdf.config.js")
+    );
+    let listed = success(
+        workspace
+            .command()
+            .args(["config", "--list"])
+            .output()
+            .unwrap(),
+    );
+    assert!(listed.contains("pdf.config_file=assets/pdf.config.js"));
+    assert!(!listed.contains("pdf.stylesheet="));
     assert!(workspace.root.join("assets/cv.md").is_file());
     assert!(workspace.root.join("assets/cv.css").is_file());
     assert!(!workspace.root.join("styles").exists());
@@ -389,7 +402,7 @@ fn config_source_uses_external_relative_absolute_and_home_paths_for_future_appli
 #[test]
 fn config_edits_preserve_comments_unknown_fields_relative_root_and_other_settings() {
     let workspace = Workspace::new();
-    let original = "# Personal settings\nroot = '../CV workspace with spaces' # relative\nsource = 'assets/cv.md' # source\ncustom = 'keep me'\n\n[pdf]\nrenderer = 'md-to-pdf' # tool\nstylesheet = 'assets/cv.css'\n";
+    let original = "# Personal settings\nroot = '../CV workspace with spaces' # relative\nsource = 'assets/cv.md' # source\ncustom = 'keep me'\n\n[pdf]\nrenderer = 'md-to-pdf' # tool\nconfig_file = 'assets/pdf.config.js'\n";
     fs::write(&workspace.config, original).unwrap();
     success(
         workspace
@@ -411,7 +424,7 @@ fn config_edits_preserve_comments_unknown_fields_relative_root_and_other_setting
     assert!(updated.contains("source = \"CV with spaces.md\" # source"));
     assert!(updated.contains("custom = 'keep me'"));
     assert!(updated.contains("renderer = \"custom-renderer\" # tool"));
-    assert!(updated.contains("stylesheet = 'assets/cv.css'"));
+    assert!(updated.contains("config_file = 'assets/pdf.config.js'"));
     let listed = success(
         workspace
             .command()
@@ -421,7 +434,7 @@ fn config_edits_preserve_comments_unknown_fields_relative_root_and_other_setting
     );
     assert_eq!(
         listed,
-        "root=../CV workspace with spaces\nsource=CV with spaces.md\npdf.renderer=custom-renderer\npdf.stylesheet=assets/cv.css"
+        "root=../CV workspace with spaces\nsource=CV with spaces.md\npdf.renderer=custom-renderer\npdf.config_file=assets/pdf.config.js"
     );
     assert_eq!(fs::read_to_string(&workspace.config).unwrap(), updated);
 }
@@ -433,7 +446,7 @@ fn config_unset_restores_defaults_and_nested_settings_can_be_added() {
         ("editor", "code --wait"),
         ("source", "other.md"),
         ("pdf.renderer", "other-renderer"),
-        ("pdf.stylesheet", "other.css"),
+        ("pdf.config_file", "other.config.js"),
         ("pdf.filename", "My CV.pdf"),
     ] {
         success(
@@ -482,7 +495,7 @@ fn config_unset_restores_defaults_and_nested_settings_can_be_added() {
     success(
         workspace
             .command()
-            .args(["config", "pdf.stylesheet", "assets/cv.css"])
+            .args(["config", "pdf.config_file", "assets/pdf.config.js"])
             .output()
             .unwrap(),
     );
@@ -490,11 +503,11 @@ fn config_unset_restores_defaults_and_nested_settings_can_be_added() {
         success(
             workspace
                 .command()
-                .args(["config", "pdf.stylesheet"])
+                .args(["config", "pdf.config_file"])
                 .output()
                 .unwrap()
         ),
-        "assets/cv.css"
+        "assets/pdf.config.js"
     );
     success(
         workspace
@@ -516,6 +529,10 @@ fn invalid_config_commands_leave_existing_configuration_unchanged() {
             "Unknown configuration key",
         ),
         (vec!["config", "pdf.unknown"], "Unknown configuration key"),
+        (
+            vec!["config", "pdf.stylesheet", "assets/cv.css"],
+            "Unknown configuration key",
+        ),
         (vec!["config", "source", ""], "cannot be empty"),
         (vec!["config", "root", "  "], "cannot be empty"),
         (vec!["config", "editor", "'"], "Invalid quoting"),
@@ -662,15 +679,15 @@ fn config_edits_preserve_symlinks_and_file_permissions() {
 
 #[cfg(unix)]
 #[test]
-fn verbose_build_reports_local_config_and_the_actual_markdown_and_external_stylesheet() {
+fn verbose_build_reports_local_config_and_the_actual_markdown_and_external_renderer_config() {
     let workspace = local_workspace();
     let source = workspace.temp.path().join("external CV.md");
-    let stylesheet = workspace.temp.path().join("external style.css");
+    let renderer_config = workspace.temp.path().join("external pdf.config.js");
     fs::write(&source, "external source CV").unwrap();
-    fs::write(&stylesheet, "body { color: navy; }").unwrap();
+    fs::write(&renderer_config, "module.exports = {};").unwrap();
     for (key, value) in [
         ("source", source.to_str().unwrap()),
-        ("pdf.stylesheet", stylesheet.to_str().unwrap()),
+        ("pdf.config_file", renderer_config.to_str().unwrap()),
     ] {
         success(
             discovered_command(&workspace)
@@ -689,7 +706,7 @@ fn verbose_build_reports_local_config_and_the_actual_markdown_and_external_style
     // Future source changes must not replace this application's tailored CV.
     fs::write(&source, "source changed after new").unwrap();
     fs::remove_file(workspace.root.join("assets/cv.md")).unwrap();
-    fs::remove_file(workspace.root.join("assets/cv.css")).unwrap();
+    fs::remove_file(workspace.root.join("assets/pdf.config.js")).unwrap();
     let nested = application.join("attachments");
     fs::create_dir(&nested).unwrap();
     let renderer = unix::executable(
@@ -712,10 +729,10 @@ fn verbose_build_reports_local_config_and_the_actual_markdown_and_external_style
         assert_eq!(
             diagnostics,
             format!(
-                "Config: {} [workspace]\nMarkdown: {}\nStylesheet: {}\nPDF: {}\n",
+                "Config: {} [workspace]\nMarkdown: {}\nRenderer config: {}\nPDF: {}\n",
                 workspace.config.display(),
                 application.join("cv.md").display(),
-                stylesheet.canonicalize().unwrap().display(),
+                renderer_config.canonicalize().unwrap().display(),
                 application.join("output/cv.pdf").display()
             )
         );
@@ -730,8 +747,8 @@ fn verbose_build_reports_local_config_and_the_actual_markdown_and_external_style
         assert_eq!(
             fs::read_to_string(&arguments).unwrap(),
             format!(
-                "--stylesheet\n{}\n--basedir\n{}\n",
-                stylesheet.canonicalize().unwrap().display(),
+                "--config-file\n{}\n--basedir\n{}\n",
+                renderer_config.canonicalize().unwrap().display(),
                 application.display()
             )
         );
@@ -759,7 +776,7 @@ fn verbose_build_reports_local_config_and_the_actual_markdown_and_external_style
 }
 
 #[test]
-fn verbose_build_reports_attempted_paths_when_stylesheet_or_config_is_missing() {
+fn verbose_build_reports_attempted_paths_when_renderer_config_or_config_is_missing() {
     let workspace = local_workspace();
     let application = workspace.application("ACME", "Developer");
     fs::create_dir(application.join("output")).unwrap();
@@ -767,11 +784,11 @@ fn verbose_build_reports_attempted_paths_when_stylesheet_or_config_is_missing() 
     fs::write(&pdf, "%PDF-1.7 previous").unwrap();
     workspace.configure(
         "pdf",
-        "stylesheet",
+        "config_file",
         workspace
             .temp
             .path()
-            .join("missing style.css")
+            .join("missing pdf.config.js")
             .to_str()
             .unwrap(),
     );
@@ -785,14 +802,18 @@ fn verbose_build_reports_attempted_paths_when_stylesheet_or_config_is_missing() 
         format!("Config: {} [workspace]", workspace.config.display()),
         format!("Markdown: {}", application.join("cv.md").display()),
         format!(
-            "Stylesheet: {}",
-            workspace.temp.path().join("missing style.css").display()
+            "Renderer config: {}",
+            workspace
+                .temp
+                .path()
+                .join("missing pdf.config.js")
+                .display()
         ),
     ] {
         assert!(diagnostics.contains(&expected), "{diagnostics}");
     }
     assert!(output.stdout.is_empty());
-    failure(output, "Cannot find shared stylesheet");
+    failure(output, "Cannot find renderer config");
     assert_eq!(fs::read_to_string(&pdf).unwrap(), "%PDF-1.7 previous");
     fs::remove_file(&workspace.config).unwrap();
     let output = workspace

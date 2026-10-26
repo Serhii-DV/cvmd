@@ -1,0 +1,15 @@
+.columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 18px;
+  align-items: start;
+}
+
+.columns > div {
+  min-width: 0;
+  break-inside: avoid;
+}
+
+.columns p:first-child {
+  margin-top: 0;
+}

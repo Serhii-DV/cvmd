@@ -21,15 +21,15 @@ pub struct Config {
 pub struct PdfConfig {
     #[serde(default = "default_renderer")]
     pub renderer: String,
-    #[serde(default = "default_stylesheet")]
-    pub stylesheet: PathBuf,
+    #[serde(default = "default_pdf_config")]
+    pub config_file: PathBuf,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub filename: Option<String>,
 }
 
 pub const WORKSPACE_CONFIG: &str = "cvmd.toml";
 pub const DEFAULT_SOURCE: &str = "assets/cv.md";
-pub const DEFAULT_STYLESHEET: &str = "assets/cv.css";
+pub const DEFAULT_PDF_CONFIG: &str = "assets/pdf.config.js";
 
 pub struct Location {
     pub path: PathBuf,
@@ -45,15 +45,15 @@ fn default_editor() -> String {
 fn default_renderer() -> String {
     "md-to-pdf".into()
 }
-fn default_stylesheet() -> PathBuf {
-    DEFAULT_STYLESHEET.into()
+fn default_pdf_config() -> PathBuf {
+    DEFAULT_PDF_CONFIG.into()
 }
 
 impl Default for PdfConfig {
     fn default() -> Self {
         Self {
             renderer: default_renderer(),
-            stylesheet: default_stylesheet(),
+            config_file: default_pdf_config(),
             filename: None,
         }
     }
@@ -61,6 +61,10 @@ impl Default for PdfConfig {
 
 impl PdfConfig {
     fn validate(&self) -> Result<()> {
+        ensure!(
+            !self.config_file.as_os_str().is_empty(),
+            "pdf.config_file must be a nonempty path"
+        );
         if let Some(filename) = &self.filename {
             let path = Path::new(filename);
             ensure!(

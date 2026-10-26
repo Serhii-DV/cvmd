@@ -2,6 +2,138 @@ use super::*;
 
 #[cfg(unix)]
 #[test]
+fn renderer_config_paths_resolve_from_the_workspace_without_overriding_their_stylesheets() {
+    let workspace = Workspace::new();
+    let application = workspace.application("ACME", "Developer");
+    let nested = application.join("attachments");
+    fs::create_dir(&nested).unwrap();
+    let renderer = unix::executable(
+        &workspace,
+        "config-renderer",
+        "printf '%s\\n' \"$@\" > \"$ARGUMENTS\"\npwd > \"$WORKING_DIRECTORY\"\ncat > \"$INPUT\"\nprintf '%s' '%PDF-1.7 configured'",
+    );
+    workspace.configure("pdf", "renderer", renderer.to_str().unwrap());
+    // CSS loading is handled by the JavaScript config inside the renderer.
+    fs::remove_file(workspace.root.join("assets/cv.css")).unwrap();
+    let custom = workspace.root.join("assets/custom config.js");
+    fs::write(&custom, "module.exports = {};").unwrap();
+    let external = workspace.temp.path().join("external config.js");
+    fs::write(&external, "module.exports = {};").unwrap();
+    let arguments = workspace.temp.path().join("renderer-arguments");
+    let working_directory = workspace.temp.path().join("renderer-directory");
+    let input = workspace.temp.path().join("renderer-input");
+
+    for (setting, expected) in [
+        (
+            "assets/pdf.config.js",
+            workspace.root.join("assets/pdf.config.js"),
+        ),
+        ("assets/custom config.js", custom),
+        (external.to_str().unwrap(), external.clone()),
+        ("~/external config.js", external.clone()),
+    ] {
+        success(
+            workspace
+                .command()
+                .args(["config", "pdf.config_file", setting])
+                .output()
+                .unwrap(),
+        );
+        assert_eq!(
+            success(
+                workspace
+                    .command()
+                    .args(["config", "--get", "pdf.config_file"])
+                    .output()
+                    .unwrap()
+            ),
+            setting
+        );
+        let report = success(workspace.command().arg("info").output().unwrap());
+        assert!(report.contains("Renderer config:"));
+        assert!(!report.contains("Stylesheet:"));
+        let output = workspace
+            .command()
+            .current_dir(&nested)
+            .env("HOME", workspace.temp.path())
+            .env("ARGUMENTS", &arguments)
+            .env("WORKING_DIRECTORY", &working_directory)
+            .env("INPUT", &input)
+            .args(["build", "--verbose", "acme"])
+            .output()
+            .unwrap();
+        assert!(String::from_utf8_lossy(&output.stderr).contains(&format!(
+            "Renderer config: {}",
+            expected.canonicalize().unwrap().display()
+        )));
+        success(output);
+        assert_eq!(
+            fs::read_to_string(&arguments).unwrap(),
+            format!(
+                "--config-file\n{}\n--basedir\n{}\n",
+                expected.canonicalize().unwrap().display(),
+                application.display()
+            )
+        );
+        assert_eq!(
+            fs::read_to_string(&working_directory).unwrap().trim(),
+            application.to_str().unwrap()
+        );
+        assert_eq!(
+            fs::read(&input).unwrap(),
+            fs::read(application.join("cv.md")).unwrap()
+        );
+        assert_eq!(
+            fs::read(application.join("output/cv.pdf")).unwrap(),
+            b"%PDF-1.7 configured"
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn missing_or_nonfile_renderer_config_preserves_the_pdf_without_starting_the_renderer() {
+    let workspace = Workspace::new();
+    let application = workspace.application("ACME", "Developer");
+    fs::create_dir(application.join("output")).unwrap();
+    let pdf = application.join("output/cv.pdf");
+    fs::write(&pdf, "%PDF-1.7 previous").unwrap();
+    let marker = workspace.temp.path().join("renderer-started");
+    let renderer = unix::executable(&workspace, "unused-renderer", "touch \"$MARKER\"");
+    workspace.configure("pdf", "renderer", renderer.to_str().unwrap());
+    for (setting, message) in [
+        ("assets/missing config.js", "Cannot find renderer config"),
+        ("assets", "Renderer config is not a file"),
+    ] {
+        workspace.configure("pdf", "config_file", setting);
+        let output = workspace
+            .command()
+            .env("MARKER", &marker)
+            .args(["build", "--verbose", "acme"])
+            .output()
+            .unwrap();
+        assert!(String::from_utf8_lossy(&output.stderr).contains(&format!(
+            "Renderer config: {}",
+            workspace.root.join(setting).display()
+        )));
+        failure(output, message);
+        assert!(!marker.exists());
+        assert_eq!(fs::read_to_string(&pdf).unwrap(), "%PDF-1.7 previous");
+        assert_eq!(fs::read_dir(application.join("output")).unwrap().count(), 1);
+    }
+    workspace.configure("pdf", "config_file", "");
+    failure(
+        workspace
+            .command()
+            .args(["build", "acme"])
+            .output()
+            .unwrap(),
+        "pdf.config_file must be a nonempty path",
+    );
+}
+
+#[cfg(unix)]
+#[test]
 fn configured_pdf_filename_is_used_and_unsetting_restores_the_markdown_name() {
     let workspace = Workspace::new();
     let application = workspace.application("ACME", "Developer");

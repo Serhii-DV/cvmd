@@ -30,7 +30,6 @@ pub fn initialize(path: &Path, source: Option<&Path>, config_path: &Path) -> Res
     }
     let root = config::absolute(path, &std::env::current_dir()?)?;
     let source_path = root.join(config::DEFAULT_SOURCE);
-    let stylesheet_path = root.join(config::DEFAULT_STYLESHEET);
     // Check before creating anything so an import never replaces an existing CV.
     if source.is_some() && source_path.try_exists()? {
         bail!("Source CV already exists at {}", source_path.display());
@@ -48,7 +47,18 @@ pub fn initialize(path: &Path, source: Option<&Path>, config_path: &Path) -> Res
     if source.is_some() && !created_source {
         bail!("Source CV already exists; import cancelled");
     }
-    create_if_missing(&stylesheet_path, include_bytes!("../assets/cv.css"))?;
+    create_if_missing(
+        &root.join("assets/cv.css"),
+        include_bytes!("../assets/cv.css"),
+    )?;
+    create_if_missing(
+        &root.join("assets/columns.css"),
+        include_bytes!("../assets/columns.css"),
+    )?;
+    create_if_missing(
+        &root.join(config::DEFAULT_PDF_CONFIG),
+        include_bytes!("../assets/pdf.config.js"),
+    )?;
     let root = root.canonicalize()?;
     let config_root = if config_path
         .parent()

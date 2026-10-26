@@ -46,7 +46,7 @@ impl Workspace {
                 .command()
                 .arg("init")
                 .arg(&workspace.root)
-                .arg("--master")
+                .arg("--source")
                 .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/cv.md"))
                 .output()
                 .unwrap(),
@@ -97,16 +97,19 @@ impl Workspace {
     }
 }
 
+#[path = "cli/configuration.rs"]
+mod configuration;
+
 #[test]
-fn initializes_and_refuses_to_overwrite_configuration_or_master() {
+fn initializes_and_refuses_to_overwrite_configuration_or_source() {
     let workspace = Workspace::new();
     assert_eq!(
-        fs::read(workspace.root.join("master/cv.md")).unwrap(),
+        fs::read(workspace.root.join("assets/cv.md")).unwrap(),
         include_bytes!("fixtures/cv.md")
     );
-    assert!(workspace.root.join("styles/cv.css").is_file());
+    assert!(workspace.root.join("assets/cv.css").is_file());
     let original_config = fs::read(&workspace.config).unwrap();
-    fs::write(workspace.root.join("master/cv.md"), "edited master").unwrap();
+    fs::write(workspace.root.join("assets/cv.md"), "edited source").unwrap();
     failure(
         workspace
             .command()
@@ -118,18 +121,17 @@ fn initializes_and_refuses_to_overwrite_configuration_or_master() {
     );
     assert_eq!(fs::read(&workspace.config).unwrap(), original_config);
     assert_eq!(
-        fs::read_to_string(workspace.root.join("master/cv.md")).unwrap(),
-        "edited master"
+        fs::read_to_string(workspace.root.join("assets/cv.md")).unwrap(),
+        "edited source"
     );
 }
 
 #[test]
 fn initializing_existing_workspace_preserves_cv_and_css() {
     let workspace = Workspace::empty();
-    fs::create_dir_all(workspace.root.join("master")).unwrap();
-    fs::create_dir_all(workspace.root.join("styles")).unwrap();
-    fs::write(workspace.root.join("master/cv.md"), "my CV").unwrap();
-    fs::write(workspace.root.join("styles/cv.css"), "my CSS").unwrap();
+    fs::create_dir_all(workspace.root.join("assets")).unwrap();
+    fs::write(workspace.root.join("assets/cv.md"), "my CV").unwrap();
+    fs::write(workspace.root.join("assets/cv.css"), "my CSS").unwrap();
     success(
         workspace
             .command()
@@ -139,11 +141,11 @@ fn initializing_existing_workspace_preserves_cv_and_css() {
             .unwrap(),
     );
     assert_eq!(
-        fs::read_to_string(workspace.root.join("master/cv.md")).unwrap(),
+        fs::read_to_string(workspace.root.join("assets/cv.md")).unwrap(),
         "my CV"
     );
     assert_eq!(
-        fs::read_to_string(workspace.root.join("styles/cv.css")).unwrap(),
+        fs::read_to_string(workspace.root.join("assets/cv.css")).unwrap(),
         "my CSS"
     );
 }
@@ -156,17 +158,17 @@ fn missing_import_does_not_create_a_workspace() {
             .command()
             .arg("init")
             .arg(&workspace.root)
-            .args(["--master", "missing.md"])
+            .args(["--source", "missing.md"])
             .output()
             .unwrap(),
-        "Cannot read master CV",
+        "Cannot read source CV",
     );
     assert!(!workspace.root.exists());
     assert!(!workspace.config.exists());
 }
 
 #[test]
-fn preserves_exact_names_in_toml_and_copies_job_and_master() {
+fn preserves_exact_names_in_toml_and_copies_job_and_source() {
     let workspace = Workspace::new();
     let company = "ACME / R&D: \"北欧\" <A/S>?* | \\";
     let position = "Senior PHP/TS Developer: C++ & Rust™";
@@ -217,7 +219,7 @@ fn preserves_exact_names_in_toml_and_copies_job_and_master() {
     assert_eq!(fs::read(path.join("notes.md")).unwrap(), b"");
     fs::write(path.join("cv.md"), "tailored CV").unwrap();
     assert_eq!(
-        fs::read(workspace.root.join("master/cv.md")).unwrap(),
+        fs::read(workspace.root.join("assets/cv.md")).unwrap(),
         include_bytes!("fixtures/cv.md")
     );
 }
@@ -283,14 +285,14 @@ fn invalid_inputs_do_not_leave_partial_applications() {
             .unwrap(),
         "Cannot read job description",
     );
-    fs::remove_file(workspace.root.join("master/cv.md")).unwrap();
+    fs::remove_file(workspace.root.join("assets/cv.md")).unwrap();
     failure(
         workspace
             .command()
             .args(["new", "ACME", "Developer"])
             .output()
             .unwrap(),
-        "Cannot read master CV",
+        "Cannot read source CV",
     );
     assert_eq!(
         fs::read_dir(workspace.root.join("applications"))
@@ -345,6 +347,18 @@ fn bare_edit_and_build_show_help_with_missing_or_invalid_configuration() {
                 "help must not print configuration errors"
             );
             assert_eq!(success(output), expected);
+            if command == "build" {
+                assert_eq!(
+                    success(
+                        workspace
+                            .command()
+                            .args(["build", "--verbose"])
+                            .output()
+                            .unwrap()
+                    ),
+                    expected
+                );
+            }
             assert!(expected.contains(&format!("Usage: cvmd {command}")));
             assert!(expected.contains("company or position alias"));
             assert!(expected.contains(&format!("cvmd {command} google")));
@@ -413,10 +427,10 @@ mod unix {
     }
 
     #[test]
-    fn expands_home_in_workspace_master_and_stylesheet_paths() {
+    fn expands_home_in_workspace_source_and_stylesheet_paths() {
         let workspace = Workspace::new();
         workspace.configure("", "root", "~/CV workspace with spaces");
-        workspace.configure("", "master", "~/CV workspace with spaces/master/cv.md");
+        workspace.configure("", "source", "~/CV workspace with spaces/assets/cv.md");
         let path = PathBuf::from(success(
             workspace
                 .command()
@@ -429,7 +443,7 @@ mod unix {
         workspace.configure(
             "pdf",
             "stylesheet",
-            "~/CV workspace with spaces/styles/cv.css",
+            "~/CV workspace with spaces/assets/cv.css",
         );
         let renderer = executable(
             &workspace,
@@ -558,7 +572,7 @@ mod unix {
             fs::read_to_string(arguments).unwrap(),
             format!(
                 "--stylesheet\n{}\n--basedir\n{}\n",
-                workspace.root.join("styles/cv.css").display(),
+                workspace.root.join("assets/cv.css").display(),
                 application.display()
             )
         );
@@ -612,7 +626,7 @@ mod unix {
             include_bytes!("fixtures/cv.md")
         );
         assert_eq!(fs::read_dir(&application).unwrap().count(), 5);
-        fs::remove_file(workspace.root.join("styles/cv.css")).unwrap();
+        fs::remove_file(workspace.root.join("assets/cv.css")).unwrap();
         failure(
             workspace
                 .command()
@@ -646,14 +660,14 @@ fn info_reports_resolved_configuration_without_changing_workspace_files() {
             format!("{} [exists]", workspace.root.display()),
         ),
         (
-            "Master CV:",
-            format!("{} [exists]", workspace.root.join("master/cv.md").display()),
+            "Source CV:",
+            format!("{} [exists]", workspace.root.join("assets/cv.md").display()),
         ),
         (
             "Stylesheet:",
             format!(
                 "{} [exists]",
-                workspace.root.join("styles/cv.css").display()
+                workspace.root.join("assets/cv.css").display()
             ),
         ),
         ("Editor:", "micro [config]".into()),
@@ -673,7 +687,7 @@ fn info_reports_resolved_configuration_without_changing_workspace_files() {
         0
     );
     assert_eq!(
-        fs::read(workspace.root.join("master/cv.md")).unwrap(),
+        fs::read(workspace.root.join("assets/cv.md")).unwrap(),
         include_bytes!("fixtures/cv.md")
     );
 }
@@ -699,10 +713,10 @@ fn info_shows_selected_config_before_missing_or_invalid_config_errors() {
 fn info_reports_missing_files_and_workspace_without_failing() {
     let workspace = Workspace::new();
     workspace.configure("", "root", "../CV workspace with spaces");
-    fs::remove_file(workspace.root.join("master/cv.md")).unwrap();
-    fs::remove_file(workspace.root.join("styles/cv.css")).unwrap();
+    fs::remove_file(workspace.root.join("assets/cv.md")).unwrap();
+    fs::remove_file(workspace.root.join("assets/cv.css")).unwrap();
     let report = success(workspace.command().arg("info").output().unwrap());
-    for relative in ["master/cv.md", "styles/cv.css"] {
+    for relative in ["assets/cv.md", "assets/cv.css"] {
         assert!(
             report.contains(&format!(
                 "{} [missing]",

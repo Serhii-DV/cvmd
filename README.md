@@ -1,7 +1,7 @@
 # cvmd
 
 A file-first Rust CLI for managing, tailoring and exporting Markdown CVs to PDF.
-Keep one master CV, create an independent copy for each application, edit it with
+Keep one source CV, create an independent copy for each application, edit it with
 your preferred tools, and render it with shared styling.
 
 ## Install
@@ -31,8 +31,9 @@ Keep your personal CV workspace outside this source repository, ideally in a
 private, backed-up directory.
 
 ```sh
-# Import your existing CV, or omit --master to use a starter template.
-cvmd init ~/CVs --master ~/Documents/my-cv.md
+# Import your existing CV, or omit --source to use a starter template.
+cvmd init ~/CVs --source ~/Documents/my-cv.md
+cd ~/CVs
 
 # Create an application and enter its directory. --job is optional.
 cd "$(cvmd new 'ACME / R&D A/S' 'Senior PHP/TS Developer' --job ~/Downloads/job.md)"
@@ -41,15 +42,15 @@ cvmd edit acme_r_d_a_s
 cvmd build acme_r_d_a_s
 ```
 
-`new` prints the new directory's absolute path. It copies the master CV without
+`new` prints the new directory's absolute path. It copies the source CV without
 modifying it, copies the supplied job description (or creates an empty `job.md`),
 and creates empty notes. Applications use the local date and time:
 
 ```text
 ~/CVs/
-├── master/
-│   └── cv.md
-├── styles/
+├── cvmd.toml
+├── assets/
+│   ├── cv.md
 │   └── cv.css
 └── applications/
     └── 2026/
@@ -90,7 +91,8 @@ Markdown and TOML files directly without the CLI.
 ### Find an application by alias
 
 Pass a company or position alias to `edit` or `build` to search the configured
-workspace from any directory:
+workspace. Run from anywhere inside the workspace, or select its config explicitly
+when working elsewhere:
 
 ```sh
 cvmd edit google
@@ -113,7 +115,7 @@ derives their aliases from valid `application.toml` metadata.
 ## Configuration
 
 Run `cvmd info` to inspect the active config file, its selection source, resolved
-workspace/master/stylesheet paths and existence, effective editor and its source,
+workspace/source/stylesheet paths and existence, effective editor and its source,
 and PDF renderer availability. Inside an application (including subdirectories),
 it also shows the application path, searchable aliases, and original company/position names.
 
@@ -128,41 +130,130 @@ then exits unsuccessfully. Missing workspace files and unavailable renderers are
 reported without failing; missing or invalid application metadata leaves the rest
 of the report available.
 
-`init` saves the workspace location in the OS configuration directory:
+### Workspace configuration
+
+`init` creates `cvmd.toml` in the workspace root, beside `assets/` and
+`applications/`. Settings are selected in this order:
+
+1. The global `--config /path/to/config.toml` option, when supplied.
+2. The nearest `cvmd.toml` in the current directory or its parents.
+3. The existing user configuration in the OS configuration directory (legacy fallback).
+
+Legacy config locations are:
 
 - Linux/WSL: `$XDG_CONFIG_HOME/cvmd/config.toml`, or `~/.config/cvmd/config.toml`.
 - macOS: `~/Library/Application Support/cvmd/config.toml`.
 - Windows: `%APPDATA%\cvmd\config.toml`.
 
-Use the global `--config /path/to/config.toml` option with any command for an
-alternate configuration or another workspace. Supply the same option on each
-invocation. `init` refuses to replace an existing configuration. When initializing
-an existing workspace, it preserves the master CV and CSS; an explicit `--master`
-import fails if a master CV already exists.
+Only one file is used; settings from different files are not merged. An invalid
+selected config produces an error rather than silently selecting another file.
+New workspaces do not write to the OS configuration directory. To work outside a
+workspace, supply `--config` on each invocation or use an existing legacy config.
+
+`init` always targets the workspace being initialized, regardless of the current
+directory's configuration. It refuses to replace an existing config. An explicit
+`--config` with `init` writes to that path instead of creating `cvmd.toml`. When
+initializing an existing workspace, it preserves the source CV and CSS; an explicit
+`--source` import fails if `assets/cv.md` already exists.
 
 ```toml
-root = "~/CVs"
-master = "master/cv.md"
+root = "."
+source = "assets/cv.md"
 editor = "micro"
 
 [pdf]
 renderer = "md-to-pdf"
-stylesheet = "styles/cv.css"
+stylesheet = "assets/cv.css"
 ```
 
 `~` and `~/…` are expanded in configuration paths. Relative `root` paths resolve
-against the configuration file's directory; relative master and stylesheet paths
-resolve against the workspace root. Input `--master` and `--job` paths resolve
+against the configuration file's directory; relative source and stylesheet paths
+resolve against the workspace root. Input `--source` and `--job` paths resolve
 against the command's current directory.
+
+New local configs use `root = "."`, so moving the whole workspace keeps its
+relative CV and stylesheet paths working. Absolute paths to external files still
+refer to those external locations.
+
+### Read and change settings
+
+Use Git-style key/value commands from inside your workspace:
+
+```sh
+cvmd config --list
+cvmd config source                         # read the stored value
+cvmd config --get source                   # explicit read
+cvmd config source ~/Documents/my-cv.md     # use an external CV for new applications
+cvmd config --local source ~/Documents/my-cv.md  # require the current workspace config
+cvmd config editor 'code --wait'
+cvmd config pdf.stylesheet assets/custom.css
+cvmd config --unset editor                 # restore the default
+```
+
+Use `--local` to explicitly read or edit the nearest `cvmd.toml` in the current
+directory or its parents. This works from an application subdirectory as well as
+the workspace root and applies to reads, writes, `--list`, and `--unset`. If no
+workspace config exists, the command fails without changing the user config.
+For a folder initialized without a local config, run `cvmd init .` from its root
+first, then use `cvmd config --local KEY VALUE`. Without `--local`, the normal
+selection order above applies. `--local` cannot be combined with `--config FILE`;
+use `--config FILE` to target a specific config from anywhere.
+
+Supported keys are `root`, `source`, `editor`, `pdf.renderer`, and `pdf.stylesheet`.
+Values are strings; quote values containing spaces. Reads show stored values,
+without expanding paths or applying `$EDITOR`; `--list` shows supported keys
+present in the file as `key=value`. Reading or unsetting an absent key fails.
+Bare `cvmd config` shows help. Use `cvmd info` to see resolved paths and defaults.
+
+`--unset` restores the default for `source` (`assets/cv.md`), `editor` (`micro`),
+`pdf.renderer` (`md-to-pdf`), or `pdf.stylesheet` (`assets/cv.css`). The required
+`root` setting cannot be unset. Empty values, unknown keys, and invalid editor
+quoting are rejected. Changes preserve comments and unrelated settings and are
+written atomically to the selected file. Config commands require an existing file;
+they do not initialize a workspace.
+
+Setting `source` references the selected CV directly: each future `new` copies its
+current contents. Existing application CVs and `assets/cv.md` remain untouched.
+Relative `source` paths resolve from the workspace root even when the command runs
+inside a nested application. In comparison, `init --source FILE` imports a snapshot
+of the source into `assets/cv.md`.
 
 `$EDITOR` takes precedence over `editor`. Editor commands accept quoted paths and
 arguments, for example `editor = "code --wait"`; they run directly without a shell.
 `pdf.renderer` is one executable name or absolute path, with no inline arguments.
 It must support md-to-pdf's stdin/stdout mode and `--stylesheet` / `--basedir` flags.
 
+### Existing workspaces
+
+Existing user configs continue to work. To adopt local configuration with your
+current settings, copy the old config into the workspace as `cvmd.toml` (if that
+file does not already exist), then run from that workspace:
+
+```sh
+cvmd config root .
+cvmd info
+```
+
+This also corrects any `root` that was relative to the old config directory. Source
+and stylesheet paths remain relative to the same workspace. Keep the old config
+if you still want its fallback outside the workspace. Alternatively, run
+`cvmd init ~/CVs` without `--source` to add a config with default settings. It
+preserves existing `assets/cv.md`, `assets/cv.css`, and applications, and creates
+missing asset files from the bundled templates.
+
 ## PDF styling
 
-Customize `styles/cv.css` once for all applications, including your fonts, spacing,
+Use `cvmd build --verbose ALIAS` (or `-v`) to print the selected config file and
+the absolute Markdown and stylesheet paths to stderr. Normal output still prints
+`Built …`. Diagnostics include the config selection source and attempted input
+paths, including when a configured stylesheet is missing.
+
+`build` renders the selected application's `cv.md`, including your tailored edits.
+The configured `source` is copied only when `new` creates an application; changing
+it does not replace an existing application's CV. `pdf.stylesheet` is resolved
+from the active config on every build, including paths outside the workspace.
+
+Customize `assets/cv.css` once for all applications, including your fonts, spacing,
 and page breaks. `build` sends the application's Markdown to md-to-pdf on stdin,
 with the application directory as the base for relative images. Successful output
 replaces `cv.pdf`; a failed render leaves any existing PDF intact. Diagnostics from
@@ -181,6 +272,6 @@ Integration tests use isolated workspaces and stub editor/renderer executables,
 so the test suite does not require Chromium or open an editor. Process integration
 tests using shell scripts run on Unix. CI runs the checks above on Linux.
 
-The MVP includes `init`, `new`, `edit`, `build`, `info`, and alias selection for
+The MVP includes `init`, `new`, `edit`, `build`, `info`, `config`, and alias selection for
 editing/building. Standalone listing, advanced filtering, bulk builds, application
 tracking, multiple templates, and AI integration are deferred.

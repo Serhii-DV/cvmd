@@ -55,9 +55,9 @@ pub fn create(
     ensure!(!company.trim().is_empty(), "Company cannot be empty");
     ensure!(!position.trim().is_empty(), "Position cannot be empty");
     // Read inputs before reserving the application directory.
-    let master_path = config.resolve(&config.master)?;
-    let cv = fs::read(&master_path)
-        .with_context(|| format!("Cannot read master CV {}", master_path.display()))?;
+    let source_path = config.resolve(&config.source)?;
+    let cv = fs::read(&source_path)
+        .with_context(|| format!("Cannot read source CV {}", source_path.display()))?;
     let job = match job {
         Some(path) => fs::read(config::expand_home(path)?)
             .with_context(|| format!("Cannot read job description {}", path.display()))?,

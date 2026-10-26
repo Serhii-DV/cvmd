@@ -85,22 +85,14 @@ fn renderer_available(renderer: &str, working_directory: &Path) -> bool {
     })
 }
 
-pub fn show(config_path: &Path, explicit_config: bool) -> Result<()> {
+pub fn show(config_path: &Path, config_source: &str) -> Result<()> {
     print_path("Config:", config_path, false);
-    println!(
-        "{:<15} {}",
-        "Config source:",
-        if explicit_config {
-            "--config"
-        } else {
-            "default"
-        }
-    );
+    println!("{:<15} {config_source}", "Config source:");
     // Preserve the selected path in the report even when loading fails. The
     // normal error handler then provides a diagnostic and a nonzero exit code.
     let config = Config::load(config_path)?;
     print_path("Workspace:", &config.root, true);
-    print_path("Master CV:", &config.resolve(&config.master)?, false);
+    print_path("Source CV:", &config.resolve(&config.source)?, false);
     print_path(
         "Stylesheet:",
         &config.resolve(&config.pdf.stylesheet)?,

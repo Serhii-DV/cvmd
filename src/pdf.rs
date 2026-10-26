@@ -7,13 +7,24 @@ use std::{
     process::{Command, Stdio},
 };
 
-pub fn build(config: &Config, application: &Path) -> Result<PathBuf> {
+pub fn build(config: &Config, application: &Path, verbose: bool) -> Result<PathBuf> {
+    let markdown = application.join("cv.md");
     let stylesheet = config.resolve(&config.pdf.stylesheet)?;
-    let stylesheet = stylesheet
-        .canonicalize()
+    let resolved_stylesheet = stylesheet.canonicalize();
+    if verbose {
+        eprintln!("Markdown: {}", markdown.display());
+        eprintln!(
+            "Stylesheet: {}",
+            resolved_stylesheet
+                .as_deref()
+                .unwrap_or(&stylesheet)
+                .display()
+        );
+    }
+    let stylesheet = resolved_stylesheet
         .with_context(|| format!("Cannot find shared stylesheet {}", stylesheet.display()))?;
     ensure!(stylesheet.is_file(), "Shared stylesheet is not a file");
-    let source = File::open(application.join("cv.md")).context("Cannot read application CV")?;
+    let source = File::open(&markdown).context("Cannot read application CV")?;
     let mut temporary = tempfile::NamedTempFile::new_in(application)?;
     // md-to-pdf's stdin/stdout mode lets us publish only successful renders.
     // File-backed streams also avoid pipe deadlocks with large CVs/PDFs.

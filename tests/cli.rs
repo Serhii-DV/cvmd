@@ -72,6 +72,19 @@ impl Workspace {
         ))
     }
 
+    fn named_application(&self, company: &str, position: &str, name: &str) -> PathBuf {
+        let source = self.application(company, position);
+        let path = self
+            .root
+            .join("applications")
+            .join(&name[..4])
+            .join(&name[5..7])
+            .join(name);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::rename(source, &path).unwrap();
+        path
+    }
+
     fn configure(&self, section: &str, key: &str, value: &str) {
         let mut config: toml::Value =
             toml::from_str(&fs::read_to_string(&self.config).unwrap()).unwrap();
@@ -176,8 +189,15 @@ fn preserves_exact_names_in_toml_and_copies_job_and_master() {
     let name = path.file_name().unwrap().to_str().unwrap();
     assert!(
         name.chars()
-            .all(|character| character.is_ascii_alphanumeric() || character == '-')
+            .all(|character| character.is_ascii_alphanumeric()
+                || matches!(character, '-' | '_' | '.'))
     );
+    let components: Vec<_> = name.split('.').collect();
+    assert_eq!(components.len(), 3);
+    assert_eq!(components[0].len(), 19);
+    assert!(chrono::NaiveDateTime::parse_from_str(components[0], "%Y-%m-%d_%H-%M-%S").is_ok());
+    assert_eq!(components[1], "acme_r_d_a_s");
+    assert_eq!(components[2], "senior_php_ts_developer_c_rust");
     let date = chrono::NaiveDate::parse_from_str(&name[..10], "%Y-%m-%d").unwrap();
     assert_eq!(
         path.parent().unwrap(),
@@ -208,10 +228,17 @@ fn collisions_and_lossy_slugs_never_overwrite_existing_applications() {
     let first = workspace.application("A/B", "Developer");
     fs::write(first.join("cv.md"), "tailored CV").unwrap();
     let second = workspace.application("A:B", "Developer");
-    assert_eq!(
-        second.file_name().unwrap().to_str().unwrap(),
-        format!("{}-2", first.file_name().unwrap().to_str().unwrap())
+    assert_ne!(first, second);
+    assert!(
+        first
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .ends_with(".a_b.developer")
     );
+    let second_name = second.file_name().unwrap().to_str().unwrap();
+    assert!(second_name.ends_with(".a_b.developer") || second_name.ends_with(".a_b.developer-2"));
     assert_eq!(
         fs::read_to_string(first.join("cv.md")).unwrap(),
         "tailored CV"
@@ -223,10 +250,10 @@ fn collisions_and_lossy_slugs_never_overwrite_existing_applications() {
             .unwrap()
             .to_str()
             .unwrap()
-            .ends_with("-unnamed-unnamed")
+            .ends_with(".unnamed.unnamed")
     );
     let long = workspace.application(&"A".repeat(500), &"B".repeat(500));
-    assert!(long.file_name().unwrap().len() < 120);
+    assert!(long.file_name().unwrap().len() < 140);
 }
 
 #[test]
@@ -304,7 +331,7 @@ mod unix {
     use super::*;
     use std::os::unix::fs::PermissionsExt;
 
-    fn executable(workspace: &Workspace, name: &str, body: &str) -> PathBuf {
+    pub(super) fn executable(workspace: &Workspace, name: &str, body: &str) -> PathBuf {
         let path = workspace.temp.path().join(name);
         fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
         fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
@@ -777,4 +804,368 @@ fn info_checks_renderer_executability_without_launching_it() {
     let report = success(workspace.command().arg("info").output().unwrap());
     assert!(report.contains(&format!("{} [unavailable]", application.display())));
     assert!(!marker.exists());
+}
+
+#[test]
+fn new_application_folders_use_second_precision_timestamps() {
+    let workspace = Workspace::new();
+    let first = workspace.application("Zulu", "Software Engineer");
+    let second = workspace.application("Alpha", "Software Engineer");
+    let first_name = first.file_name().unwrap().to_str().unwrap();
+    let second_name = second.file_name().unwrap().to_str().unwrap();
+    assert!(first_name.ends_with(".zulu.software_engineer"));
+    assert!(second_name.ends_with(".alpha.software_engineer"));
+    assert_eq!(first_name.split('.').next().unwrap().len(), 19);
+    assert_eq!(second_name.split('.').next().unwrap().len(), 19);
+    let first_time = chrono::NaiveDateTime::parse_from_str(
+        first_name.split('.').next().unwrap(),
+        "%Y-%m-%d_%H-%M-%S",
+    )
+    .unwrap();
+    let second_time = chrono::NaiveDateTime::parse_from_str(
+        second_name.split('.').next().unwrap(),
+        "%Y-%m-%d_%H-%M-%S",
+    )
+    .unwrap();
+    assert!(first_time <= second_time);
+    if first_time < second_time {
+        assert!(first < second);
+    }
+}
+
+#[test]
+fn info_and_current_directory_discovery_support_date_only_folders() {
+    let workspace = Workspace::new();
+    let application = workspace.named_application(
+        "Legacy / Co",
+        "Software Engineer",
+        "2025-03-01-legacy-co-software-engineer",
+    );
+    let report = success(
+        workspace
+            .command()
+            .current_dir(&application)
+            .arg("info")
+            .output()
+            .unwrap(),
+    );
+    assert!(report.contains(application.to_str().unwrap()));
+    assert!(report.contains(&format!("{:<15} legacy_co", "Company alias:")));
+    assert!(report.contains(&format!("{:<15} software_engineer", "Position alias:")));
+    fs::remove_file(application.join("application.toml")).unwrap();
+    let report = success(
+        workspace
+            .command()
+            .current_dir(&application)
+            .arg("info")
+            .output()
+            .unwrap(),
+    );
+    assert!(report.contains(&format!("{:<15} {}", "Application:", application.display())));
+}
+
+#[test]
+fn alias_search_rejects_empty_partial_and_missing_aliases() {
+    let workspace = Workspace::new();
+    let application = workspace.application("Google", "Software Engineer");
+    for (query, error) in [
+        ("", "Application alias cannot be empty"),
+        ("goog", "No applications found"),
+        ("missing", "No applications found"),
+    ] {
+        for command in ["edit", "build"] {
+            failure(
+                workspace.command().args([command, query]).output().unwrap(),
+                error,
+            );
+        }
+    }
+    fs::remove_file(application.join("cv.md")).unwrap();
+    failure(
+        workspace
+            .command()
+            .args(["edit", "google"])
+            .output()
+            .unwrap(),
+        "Application CV is missing",
+    );
+    failure(
+        workspace
+            .command()
+            .args(["build", "software_engineer"])
+            .output()
+            .unwrap(),
+        "Application CV is missing",
+    );
+}
+
+#[cfg(unix)]
+mod alias_selection {
+    use super::*;
+    use std::{io::Write, process::Stdio};
+
+    fn with_input(mut command: Command, input: &str) -> Output {
+        let mut child = command
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(input.as_bytes())
+            .unwrap();
+        child.wait_with_output().unwrap()
+    }
+
+    fn editor(workspace: &Workspace) -> PathBuf {
+        unix::executable(
+            workspace,
+            "alias-editor",
+            "printf '%s' \"$1\" > \"$CAPTURE\"",
+        )
+    }
+
+    fn renderer(workspace: &Workspace) {
+        let renderer = unix::executable(
+            workspace,
+            "alias-renderer",
+            "cat >/dev/null\nprintf '%s' '%PDF-1.7 mock'",
+        );
+        workspace.configure("pdf", "renderer", renderer.to_str().unwrap());
+    }
+
+    #[test]
+    fn single_company_or_position_match_works_without_metadata_from_any_directory() {
+        let workspace = Workspace::new();
+        let application = workspace.application("Google", "Software Engineer");
+        let unrelated = workspace.application("Other", "Developer");
+        fs::remove_file(application.join("application.toml")).unwrap();
+        let capture = workspace.temp.path().join("opened-cv");
+        let editor = editor(&workspace);
+        let report = success(
+            workspace
+                .command()
+                .current_dir(&application)
+                .arg("info")
+                .output()
+                .unwrap(),
+        );
+        assert!(report.contains(&format!("{:<15} google", "Company alias:")));
+        assert!(report.contains(&format!("{:<15} software_engineer", "Position alias:")));
+        for query in ["GOOGLE", "software_engineer"] {
+            success(
+                workspace
+                    .command()
+                    .current_dir(&unrelated)
+                    .args(["edit", query])
+                    .env("EDITOR", &editor)
+                    .env("CAPTURE", &capture)
+                    .output()
+                    .unwrap(),
+            );
+            assert_eq!(
+                fs::read_to_string(&capture).unwrap(),
+                application.join("cv.md").to_str().unwrap()
+            );
+        }
+        renderer(&workspace);
+        success(
+            workspace
+                .command()
+                .args(["build", "software_engineer"])
+                .output()
+                .unwrap(),
+        );
+        assert_eq!(
+            fs::read(application.join("cv.pdf")).unwrap(),
+            b"%PDF-1.7 mock"
+        );
+        assert!(!unrelated.join("cv.pdf").exists());
+    }
+
+    #[test]
+    fn multiple_matches_are_newest_first_and_invalid_numbers_prompt_again() {
+        let workspace = Workspace::new();
+        let oldest = workspace.named_application(
+            "Google",
+            "Developer",
+            "2025-12-31_23-59-59-000000001.google.developer",
+        );
+        let newest = workspace.named_application(
+            "Google",
+            "Software Engineer",
+            "2026-10-26_19-12-30.google.software_engineer",
+        );
+        let unrelated = workspace.application("Other", "Developer");
+        let capture = workspace.temp.path().join("opened-cv");
+        let mut command = workspace.command();
+        command
+            .args(["edit", "google"])
+            .env("EDITOR", editor(&workspace))
+            .env("CAPTURE", &capture);
+        let output = with_input(command, "0\n99\ninvalid\n2\n");
+        let diagnostics = String::from_utf8_lossy(&output.stderr);
+        assert!(diagnostics.contains("Found 2 applications (newest first)"));
+        assert!(diagnostics.contains(&format!("1. {}", newest.display())));
+        assert!(diagnostics.contains(&format!("2. {}", oldest.display())));
+        assert!(diagnostics.contains("Enter a number from 1 to 2"));
+        assert!(!diagnostics.contains(unrelated.to_str().unwrap()));
+        assert!(
+            success(output).is_empty(),
+            "selection prompts must stay off stdout"
+        );
+        assert_eq!(
+            fs::read_to_string(capture).unwrap(),
+            oldest.join("cv.md").to_str().unwrap()
+        );
+    }
+
+    #[test]
+    fn build_selects_only_the_chosen_position_match_and_handles_collision_suffixes() {
+        let workspace = Workspace::new();
+        let oldest = workspace.named_application(
+            "Google",
+            "Software Engineer",
+            "2026-10-26_19-12-30.google.software_engineer",
+        );
+        let newest = workspace.named_application(
+            "Google",
+            "Software Engineer",
+            "2026-10-26_19-12-30.google.software_engineer-2",
+        );
+        fs::remove_file(newest.join("application.toml")).unwrap();
+        renderer(&workspace);
+        let mut command = workspace.command();
+        command.args(["build", "software_engineer"]);
+        let report = success(with_input(command, "1\n"));
+        assert!(report.contains(newest.join("cv.pdf").to_str().unwrap()));
+        assert_eq!(fs::read(newest.join("cv.pdf")).unwrap(), b"%PDF-1.7 mock");
+        assert!(!oldest.join("cv.pdf").exists());
+    }
+
+    #[test]
+    fn cancellation_and_end_of_input_do_not_launch_tools() {
+        let workspace = Workspace::new();
+        let first = workspace.application("Google", "Developer");
+        let second = workspace.application("Google", "Software Engineer");
+        let capture = workspace.temp.path().join("opened-cv");
+        renderer(&workspace);
+        for command_name in ["edit", "build"] {
+            for (input, message) in [
+                ("q\n", "Application selection cancelled"),
+                ("\n", "Application selection cancelled"),
+                ("", "No selection received"),
+            ] {
+                let mut command = workspace.command();
+                command
+                    .args([command_name, "google"])
+                    .env("EDITOR", editor(&workspace))
+                    .env("CAPTURE", &capture);
+                failure(with_input(command, input), message);
+                assert!(!capture.exists());
+                assert!(!first.join("cv.pdf").exists());
+                assert!(!second.join("cv.pdf").exists());
+            }
+        }
+    }
+
+    #[test]
+    fn legacy_folders_support_alias_selection_and_edit_build_without_metadata() {
+        let workspace = Workspace::new();
+        let application = workspace.named_application(
+            "Legacy / Co",
+            "Software Engineer",
+            "2025-03-01-legacy-co-software-engineer",
+        );
+        let capture = workspace.temp.path().join("opened-cv");
+        let editor = editor(&workspace);
+        success(
+            workspace
+                .command()
+                .args(["edit", "legacy_co"])
+                .env("EDITOR", &editor)
+                .env("CAPTURE", &capture)
+                .output()
+                .unwrap(),
+        );
+        assert_eq!(
+            fs::read_to_string(&capture).unwrap(),
+            application.join("cv.md").to_str().unwrap()
+        );
+        renderer(&workspace);
+        success(
+            workspace
+                .command()
+                .args(["build", "software_engineer"])
+                .output()
+                .unwrap(),
+        );
+        fs::remove_file(application.join("application.toml")).unwrap();
+        let nested = application.join("attachments");
+        fs::create_dir(&nested).unwrap();
+        success(
+            workspace
+                .command()
+                .current_dir(&nested)
+                .arg("edit")
+                .env("EDITOR", &editor)
+                .env("CAPTURE", &capture)
+                .output()
+                .unwrap(),
+        );
+        success(
+            workspace
+                .command()
+                .current_dir(nested)
+                .arg("build")
+                .output()
+                .unwrap(),
+        );
+        assert_eq!(
+            fs::read(application.join("cv.pdf")).unwrap(),
+            b"%PDF-1.7 mock"
+        );
+    }
+
+    #[test]
+    fn search_skips_invalid_layouts_and_directory_symlinks() {
+        use std::os::unix::fs::symlink;
+        let workspace = Workspace::new();
+        workspace.named_application(
+            "Google",
+            "Developer",
+            "2026-10-26_99-99-99-000000001.google.developer",
+        );
+        let wrong_month = workspace.named_application(
+            "Google",
+            "Developer",
+            "2026-11-26_19-12-30-123456789.google.developer",
+        );
+        let moved = workspace
+            .root
+            .join("applications/2026/10")
+            .join(wrong_month.file_name().unwrap());
+        fs::rename(wrong_month, moved).unwrap();
+        let outside = workspace.temp.path().join("outside");
+        fs::create_dir(&outside).unwrap();
+        fs::write(outside.join("cv.md"), "external CV").unwrap();
+        symlink(
+            outside,
+            workspace
+                .root
+                .join("applications/2026/10/2026-10-26_19-12-30-123456789.google.developer"),
+        )
+        .unwrap();
+        failure(
+            workspace
+                .command()
+                .args(["edit", "google"])
+                .output()
+                .unwrap(),
+            "No applications found",
+        );
+    }
 }

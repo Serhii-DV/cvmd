@@ -9,6 +9,7 @@
 - `src/config.rs`: TOML configuration and path resolution.
 - `src/workspace.rs`: workspace initialization.
 - `src/application.rs`: application creation, discovery, and editing.
+- `src/selection.rs`: alias search and numbered application selection.
 - `src/pdf.rs`: external renderer execution and PDF publication.
 
 `assets/` contains the starter CV and shared CSS. `tests/cli.rs` contains integration

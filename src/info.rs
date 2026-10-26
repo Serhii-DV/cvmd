@@ -128,6 +128,10 @@ pub fn show(config_path: &Path, explicit_config: bool) -> Result<()> {
         None => println!("{:<15} none", "Application:"),
         Some(path) => {
             println!("{:<15} {}", "Application:", path.display());
+            if let Some(aliases) = application::aliases(&path) {
+                println!("{:<15} {}", "Company alias:", aliases.company);
+                println!("{:<15} {}", "Position alias:", aliases.position);
+            }
             let identity_path = path.join("application.toml");
             let identity = (|| -> Result<application::Identity> {
                 let text = fs::read_to_string(&identity_path)

@@ -4,5 +4,13 @@
 
 ### Added
 
+- `edit [ALIAS]` and `build [ALIAS]` find applications by company or position alias,
+  with numbered selection when several match. `info` displays the aliases.
 - `cvmd info` reports the active configuration, workspace paths, editor source,
   renderer availability, and current application's original company and position names.
+
+### Changed
+
+- New application folders use `YYYY-MM-DD_HH-MM-SS.company_alias.position_alias`,
+  with local time and second precision. Existing date-only and fractional-second
+  folders remain supported.

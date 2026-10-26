@@ -30,8 +30,14 @@ pub enum Commands {
         #[arg(long, value_name = "FILE")]
         job: Option<PathBuf>,
     },
-    /// Open this application's CV with $EDITOR or the configured editor
-    Edit,
-    /// Render this application's CV to PDF using the shared stylesheet
-    Build,
+    /// Open an application CV, optionally finding it by company or position alias
+    Edit {
+        /// Exact company or position alias; choose from a list if several match
+        alias: Option<String>,
+    },
+    /// Render an application CV, optionally finding it by company or position alias
+    Build {
+        /// Exact company or position alias; choose from a list if several match
+        alias: Option<String>,
+    },
 }

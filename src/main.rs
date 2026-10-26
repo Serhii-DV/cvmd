@@ -3,6 +3,7 @@ mod cli;
 mod config;
 mod info;
 mod pdf;
+mod selection;
 mod workspace;
 
 use anyhow::Result;
@@ -29,14 +30,14 @@ fn run() -> Result<()> {
             // Print just the path so it can be used with: cd "$(cvmd new ...)".
             println!("{}", path.display());
         }
-        Commands::Edit => {
+        Commands::Edit { alias } => {
             let config = config::Config::load(&config_path)?;
-            let path = application::locate(&config)?;
+            let path = selection::resolve(&config, alias.as_deref())?;
             application::edit(&config, &path)?;
         }
-        Commands::Build => {
+        Commands::Build { alias } => {
             let config = config::Config::load(&config_path)?;
-            let path = application::locate(&config)?;
+            let path = selection::resolve(&config, alias.as_deref())?;
             let output = pdf::build(&config, &path)?;
             println!("Built {}", output.display());
         }

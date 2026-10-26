@@ -4,6 +4,9 @@
 
 ### Added
 
+- Optional `[pdf] filename` selects a PDF name within each application directory.
+  Omit it to use the Markdown stem with `.pdf`. The setting supports config
+  read/write/unset commands, and verbose builds show the PDF output path.
 - `build --verbose` (`-v`) reports the selected config, application Markdown, and
   configured stylesheet paths on stderr to help diagnose PDF inputs.
 - `config --local` reads or updates the nearest workspace `cvmd.toml` and fails

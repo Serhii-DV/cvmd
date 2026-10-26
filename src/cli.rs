@@ -18,7 +18,7 @@ pub enum Commands {
     Info,
     /// Read or change configuration values
     #[command(
-        after_help = "Examples:\n  cvmd config source\n  cvmd config --local source ~/Documents/my-cv.md\n  cvmd config pdf.renderer md-to-pdf\n  cvmd config --list\n  cvmd config --unset editor\n\nKeys: root, source, editor, pdf.renderer, pdf.stylesheet"
+        after_help = "Examples:\n  cvmd config source\n  cvmd config --local source ~/Documents/my-cv.md\n  cvmd config pdf.renderer md-to-pdf\n  cvmd config pdf.filename 'My CV.pdf'\n  cvmd config --list\n  cvmd config --unset editor\n\nKeys: root, source, editor, pdf.renderer, pdf.stylesheet, pdf.filename"
     )]
     Config(ConfigArgs),
     /// Initialize a CV workspace with its own cvmd.toml
@@ -49,7 +49,7 @@ pub enum Commands {
     Build {
         /// Exact company or position alias; omit to show help
         alias: Option<String>,
-        /// Show the active config, Markdown and stylesheet paths on stderr
+        /// Show the active config, Markdown, stylesheet and PDF paths on stderr
         #[arg(short, long)]
         verbose: bool,
     },

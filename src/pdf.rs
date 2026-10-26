@@ -9,6 +9,7 @@ use std::{
 
 pub fn build(config: &Config, application: &Path, verbose: bool) -> Result<PathBuf> {
     let markdown = application.join("cv.md");
+    let destination = config.pdf.output_path(&markdown);
     let stylesheet = config.resolve(&config.pdf.stylesheet)?;
     let resolved_stylesheet = stylesheet.canonicalize();
     if verbose {
@@ -20,6 +21,7 @@ pub fn build(config: &Config, application: &Path, verbose: bool) -> Result<PathB
                 .unwrap_or(&stylesheet)
                 .display()
         );
+        eprintln!("PDF: {}", destination.display());
     }
     let stylesheet = resolved_stylesheet
         .with_context(|| format!("Cannot find shared stylesheet {}", stylesheet.display()))?;
@@ -53,7 +55,6 @@ pub fn build(config: &Config, application: &Path, verbose: bool) -> Result<PathB
         .read_exact(&mut signature)
         .context("Renderer did not produce a PDF on stdout")?;
     ensure!(&signature == b"%PDF-", "Renderer output is not a PDF");
-    let destination = application.join("cv.pdf");
     temporary
         .persist(&destination)
         .context("Cannot save rendered PDF")?;

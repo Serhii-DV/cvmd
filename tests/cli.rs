@@ -91,7 +91,10 @@ impl Workspace {
         if section.is_empty() {
             config[key] = value.into();
         } else {
-            config[section][key] = value.into();
+            config[section]
+                .as_table_mut()
+                .unwrap()
+                .insert(key.to_owned(), value.into());
         }
         fs::write(&self.config, toml::to_string_pretty(&config).unwrap()).unwrap();
     }
@@ -99,6 +102,9 @@ impl Workspace {
 
 #[path = "cli/configuration.rs"]
 mod configuration;
+
+#[path = "cli/pdf.rs"]
+mod pdf;
 
 #[test]
 fn initializes_and_refuses_to_overwrite_configuration_or_source() {

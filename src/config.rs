@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, bail, ensure};
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -23,6 +23,8 @@ pub struct PdfConfig {
     pub renderer: String,
     #[serde(default = "default_stylesheet")]
     pub stylesheet: PathBuf,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filename: Option<String>,
 }
 
 pub const WORKSPACE_CONFIG: &str = "cvmd.toml";
@@ -52,6 +54,34 @@ impl Default for PdfConfig {
         Self {
             renderer: default_renderer(),
             stylesheet: default_stylesheet(),
+            filename: None,
+        }
+    }
+}
+
+impl PdfConfig {
+    fn validate(&self) -> Result<()> {
+        if let Some(filename) = &self.filename {
+            let path = Path::new(filename);
+            ensure!(
+                !filename.trim().is_empty()
+                    && !filename.contains(['/', '\\', '\0'])
+                    && path.file_name() == Some(path.as_os_str()),
+                "pdf.filename must be a nonempty file name without directory components"
+            );
+            ensure!(
+                path.extension()
+                    .is_some_and(|extension| extension.eq_ignore_ascii_case("pdf")),
+                "pdf.filename must end with .pdf"
+            );
+        }
+        Ok(())
+    }
+
+    pub fn output_path(&self, markdown: &Path) -> PathBuf {
+        match &self.filename {
+            Some(filename) => markdown.with_file_name(filename),
+            None => markdown.with_extension("pdf"),
         }
     }
 }
@@ -157,6 +187,7 @@ impl Config {
         if config.root.as_os_str().is_empty() {
             bail!("Workspace root cannot be empty");
         }
+        config.pdf.validate()?;
         config.root = absolute(
             &config.root,
             path.parent().context("Configuration has no parent")?,

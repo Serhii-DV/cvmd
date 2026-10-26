@@ -3,7 +3,14 @@ use anyhow::{Context, Result, bail, ensure};
 use std::{fs, io::Write, path::Path};
 use toml_edit::{DocumentMut, Item, Table, Value};
 
-const KEYS: &[&str] = &["root", "source", "editor", "pdf.renderer", "pdf.stylesheet"];
+const KEYS: &[&str] = &[
+    "root",
+    "source",
+    "editor",
+    "pdf.renderer",
+    "pdf.stylesheet",
+    "pdf.filename",
+];
 
 fn setting<'a>(document: &'a DocumentMut, key: &str) -> Option<&'a Item> {
     match key.split_once('.') {

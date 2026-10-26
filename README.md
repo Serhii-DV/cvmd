@@ -164,6 +164,7 @@ editor = "micro"
 [pdf]
 renderer = "md-to-pdf"
 stylesheet = "assets/cv.css"
+# filename = "Jane Doe CV.pdf"  # optional; otherwise use the Markdown stem
 ```
 
 `~` and `~/…` are expanded in configuration paths. Relative `root` paths resolve
@@ -187,6 +188,7 @@ cvmd config source ~/Documents/my-cv.md     # use an external CV for new applica
 cvmd config --local source ~/Documents/my-cv.md  # require the current workspace config
 cvmd config editor 'code --wait'
 cvmd config pdf.stylesheet assets/custom.css
+cvmd config --local pdf.filename 'Jane Doe CV.pdf'
 cvmd config --unset editor                 # restore the default
 ```
 
@@ -199,14 +201,16 @@ first, then use `cvmd config --local KEY VALUE`. Without `--local`, the normal
 selection order above applies. `--local` cannot be combined with `--config FILE`;
 use `--config FILE` to target a specific config from anywhere.
 
-Supported keys are `root`, `source`, `editor`, `pdf.renderer`, and `pdf.stylesheet`.
+Supported keys are `root`, `source`, `editor`, `pdf.renderer`, `pdf.stylesheet`,
+and `pdf.filename`.
 Values are strings; quote values containing spaces. Reads show stored values,
 without expanding paths or applying `$EDITOR`; `--list` shows supported keys
 present in the file as `key=value`. Reading or unsetting an absent key fails.
 Bare `cvmd config` shows help. Use `cvmd info` to see resolved paths and defaults.
 
 `--unset` restores the default for `source` (`assets/cv.md`), `editor` (`micro`),
-`pdf.renderer` (`md-to-pdf`), or `pdf.stylesheet` (`assets/cv.css`). The required
+`pdf.renderer` (`md-to-pdf`), or `pdf.stylesheet` (`assets/cv.css`). Unsetting
+`pdf.filename` restores the name derived from the Markdown file. The required
 `root` setting cannot be unset. Empty values, unknown keys, and invalid editor
 quoting are rejected. Changes preserve comments and unrelated settings and are
 written atomically to the selected file. Config commands require an existing file;
@@ -244,8 +248,8 @@ missing asset files from the bundled templates.
 ## PDF styling
 
 Use `cvmd build --verbose ALIAS` (or `-v`) to print the selected config file and
-the absolute Markdown and stylesheet paths to stderr. Normal output still prints
-`Built …`. Diagnostics include the config selection source and attempted input
+the absolute Markdown, stylesheet, and PDF output paths to stderr. Normal output
+still prints `Built …`. Diagnostics include the config selection source and attempted input
 paths, including when a configured stylesheet is missing.
 
 `build` renders the selected application's `cv.md`, including your tailored edits.
@@ -253,11 +257,25 @@ The configured `source` is copied only when `new` creates an application; changi
 it does not replace an existing application's CV. `pdf.stylesheet` is resolved
 from the active config on every build, including paths outside the workspace.
 
+The PDF uses the Markdown file's stem by default: `cv.md` produces `cv.pdf`.
+To choose a different name, set `filename` under `[pdf]` in `cvmd.toml`:
+
+```toml
+[pdf]
+filename = "Jane Doe CV.pdf"
+```
+
+The name must include the `.pdf` extension and contain no directory components.
+Spaces and Unicode are supported. The PDF stays in the selected application
+directory. This setting changes the output name without renaming the Markdown.
+Remove the setting or run `cvmd config --local --unset pdf.filename` to restore
+the default. Changing the setting leaves PDFs with other names intact.
+
 Customize `assets/cv.css` once for all applications, including your fonts, spacing,
 and page breaks. `build` sends the application's Markdown to md-to-pdf on stdin,
 with the application directory as the base for relative images. Successful output
-replaces `cv.pdf`; a failed render leaves any existing PDF intact. Diagnostics from
-the renderer appear on stderr. Avoid setting `dest` in Markdown front matter,
+replaces the selected PDF output; a failed render leaves any existing PDF intact.
+Diagnostics from the renderer appear on stderr. Avoid setting `dest` in Markdown front matter,
 since cvmd expects the renderer to return the PDF on stdout.
 
 ## Development

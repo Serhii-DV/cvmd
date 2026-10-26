@@ -434,6 +434,7 @@ fn config_unset_restores_defaults_and_nested_settings_can_be_added() {
         ("source", "other.md"),
         ("pdf.renderer", "other-renderer"),
         ("pdf.stylesheet", "other.css"),
+        ("pdf.filename", "My CV.pdf"),
     ] {
         success(
             workspace
@@ -711,10 +712,11 @@ fn verbose_build_reports_local_config_and_the_actual_markdown_and_external_style
         assert_eq!(
             diagnostics,
             format!(
-                "Config: {} [workspace]\nMarkdown: {}\nStylesheet: {}\n",
+                "Config: {} [workspace]\nMarkdown: {}\nStylesheet: {}\nPDF: {}\n",
                 workspace.config.display(),
                 application.join("cv.md").display(),
-                stylesheet.canonicalize().unwrap().display()
+                stylesheet.canonicalize().unwrap().display(),
+                application.join("cv.pdf").display()
             )
         );
         assert_eq!(

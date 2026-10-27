@@ -18,7 +18,7 @@ pub enum Commands {
     Info,
     /// Read or change configuration values
     #[command(
-        after_help = "Examples:\n  cvmd config source\n  cvmd config --local source ~/Documents/my-cv.md\n  cvmd config pdf.renderer md-to-pdf\n  cvmd config pdf.filename 'My CV.pdf'\n  cvmd config --list\n  cvmd config --unset editor\n\nKeys: root, source, editor, pdf.renderer, pdf.config_file, pdf.filename"
+        after_help = "Examples:\n  cvmd config source\n  cvmd config --local source ~/Documents/my-cv.md\n  cvmd config pdf.renderer md-to-pdf\n  cvmd config pdf.filename 'My CV.pdf'\n  cvmd config --list\n  cvmd config --unset editor\n\nKeys: root, source, editor, browser, pdf.renderer, pdf.config_file, pdf.filename"
     )]
     Config(ConfigArgs),
     /// Initialize a CV workspace with its own cvmd.toml
@@ -38,6 +38,11 @@ pub enum Commands {
     },
     /// Show an application and its files by company or position alias
     Show {
+        /// Exact company or position alias; omit to show help
+        alias: Option<String>,
+    },
+    /// Open a generated PDF by company or position alias
+    Open {
         /// Exact company or position alias; omit to show help
         alias: Option<String>,
     },

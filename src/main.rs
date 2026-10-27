@@ -58,6 +58,14 @@ fn run() -> Result<()> {
             let path = selection::resolve_directory(&config, &alias)?;
             application::show(&path)?;
         }
+        Commands::Open { alias } => {
+            let Some(alias) = alias else {
+                return cli::print_command_help("open");
+            };
+            let config = config::Config::load(&config_path()?.path)?;
+            let path = selection::resolve_directory(&config, &alias)?;
+            pdf::open(&config, &path, &alias)?;
+        }
         Commands::Edit { alias } => {
             let Some(alias) = alias else {
                 return cli::print_command_help("edit");

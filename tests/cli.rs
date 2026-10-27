@@ -1318,3 +1318,96 @@ fn show_lists_existing_files_and_handles_missing_cv_and_metadata() {
     assert!(!report.contains("cv.md"));
     assert!(report.contains("output/custom.pdf"));
 }
+
+#[cfg(target_os = "linux")]
+#[test]
+fn open_uses_configured_pdf_and_reports_missing_file() {
+    use std::os::unix::fs::PermissionsExt;
+    let workspace = Workspace::new();
+    let path = workspace.application("ACME", "Developer");
+    workspace.configure("pdf", "filename", "My CV.pdf");
+    let missing = workspace.command().args(["open", "acme"]).output().unwrap();
+    assert!(String::from_utf8_lossy(&missing.stderr).contains("My CV.pdf"));
+    failure(missing, "Run cvmd build");
+    fs::create_dir(path.join("output")).unwrap();
+    let pdf = path.join("output/My CV.pdf");
+    fs::write(&pdf, "PDF").unwrap();
+    let opener = workspace.temp.path().join("test-browser");
+    let record = workspace.temp.path().join("opened");
+    fs::write(
+        &opener,
+        "#!/bin/sh\nprintf '%s' \"$1\" > \"$CVMD_TEST_OPENED\"\n",
+    )
+    .unwrap();
+    fs::set_permissions(&opener, fs::Permissions::from_mode(0o755)).unwrap();
+    success(
+        workspace
+            .command()
+            .args(["open", "developer"])
+            .env("BROWSER", &opener)
+            .env("CVMD_TEST_OPENED", &record)
+            .output()
+            .unwrap(),
+    );
+    for _ in 0..100 {
+        if record.exists() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert_eq!(fs::read_to_string(record).unwrap(), pdf.to_str().unwrap());
+}
+
+#[test]
+fn browser_configuration_and_environment_precedence() {
+    let workspace = Workspace::new();
+    success(
+        workspace
+            .command()
+            .args(["config", "browser", "wslview --option"])
+            .output()
+            .unwrap(),
+    );
+    let stored = success(
+        workspace
+            .command()
+            .args(["config", "browser"])
+            .output()
+            .unwrap(),
+    );
+    assert_eq!(stored, "wslview --option");
+    let info = success(
+        workspace
+            .command()
+            .arg("info")
+            .env_remove("BROWSER")
+            .output()
+            .unwrap(),
+    );
+    assert!(info.contains("wslview --option [config]"));
+    let info = success(
+        workspace
+            .command()
+            .arg("info")
+            .env("BROWSER", "firefox")
+            .output()
+            .unwrap(),
+    );
+    assert!(info.contains("firefox [$BROWSER]"));
+    success(
+        workspace
+            .command()
+            .args(["config", "--unset", "browser"])
+            .output()
+            .unwrap(),
+    );
+    let info = success(
+        workspace
+            .command()
+            .arg("info")
+            .env("BROWSER", " ")
+            .output()
+            .unwrap(),
+    );
+    assert!(info.contains("auto-detect [automatic]"));
+}

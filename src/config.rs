@@ -13,6 +13,8 @@ pub struct Config {
     pub source: PathBuf,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub editor: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub browser: Option<String>,
     #[serde(default)]
     pub pdf: PdfConfig,
 }
@@ -173,6 +175,7 @@ impl Config {
             root,
             source: default_source(),
             editor: Some(default_editor()),
+            browser: None,
             pdf: PdfConfig::default(),
         }
     }
@@ -220,6 +223,18 @@ impl Config {
 
     pub fn resolve(&self, path: &Path) -> Result<PathBuf> {
         absolute(path, &self.root)
+    }
+
+    pub fn effective_browser(&self) -> (Option<String>, &'static str) {
+        if let Ok(browser) = std::env::var("BROWSER")
+            && !browser.trim().is_empty()
+        {
+            return (Some(browser), "$BROWSER");
+        }
+        match &self.browser {
+            Some(browser) if !browser.trim().is_empty() => (Some(browser.clone()), "config"),
+            _ => (None, "automatic"),
+        }
     }
 
     pub fn effective_editor(&self) -> (String, &'static str) {

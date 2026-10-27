@@ -68,3 +68,52 @@ pub fn build(config: &Config, application: &Path, verbose: bool) -> Result<PathB
         .context("Cannot save rendered PDF")?;
     Ok(destination)
 }
+
+pub fn open(config: &Config, application: &Path, alias: &str) -> Result<()> {
+    let destination = config.pdf.output_path(&application.join("cv.md"))?;
+    ensure!(
+        destination.is_file(),
+        "PDF not found: {}. Run cvmd build {:?} first",
+        destination.display(),
+        alias
+    );
+    let (browser, _) = config.effective_browser();
+    let candidates: Vec<Vec<String>> = if let Some(browser) = browser {
+        let arguments =
+            shell_words::split(&browser).context("Invalid quoting in browser command")?;
+        ensure!(!arguments.is_empty(), "BROWSER cannot be empty");
+        vec![arguments]
+    } else {
+        #[cfg(target_os = "windows")]
+        let names = ["msedge", "chrome", "firefox"];
+        #[cfg(target_os = "macos")]
+        let names = [
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Firefox.app/Contents/MacOS/firefox",
+            "/Applications/Safari.app/Contents/MacOS/Safari",
+        ];
+        #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+        let names = ["firefox", "google-chrome", "chromium", "chromium-browser"];
+        names
+            .into_iter()
+            .map(|name| vec![name.to_owned()])
+            .collect()
+    };
+    for arguments in candidates {
+        let result = Command::new(&arguments[0])
+            .args(&arguments[1..])
+            .arg(&destination)
+            .spawn();
+        match result {
+            Ok(_) => return Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => {
+                return Err(error)
+                    .with_context(|| format!("Cannot launch browser {}", arguments[0]));
+            }
+        }
+    }
+    anyhow::bail!(
+        "Cannot find a browser; install one or set browser in configuration or BROWSER to a browser command"
+    )
+}

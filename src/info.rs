@@ -98,6 +98,12 @@ pub fn show(config_path: &Path, config_source: &str) -> Result<()> {
         &config.resolve(&config.pdf.config_file)?,
         false,
     );
+    let (browser, browser_source) = config.effective_browser();
+    println!(
+        "{:<15} {} [{browser_source}]",
+        "Browser:",
+        browser.as_deref().unwrap_or("auto-detect")
+    );
     let (editor, source) = config.effective_editor();
     println!("{:<15} {editor} [{source}]", "Editor:");
     let application = application::discover(&config)?;

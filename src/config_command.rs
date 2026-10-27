@@ -7,6 +7,7 @@ const KEYS: &[&str] = &[
     "root",
     "source",
     "editor",
+    "browser",
     "pdf.renderer",
     "pdf.config_file",
     "pdf.filename",
@@ -28,11 +29,12 @@ fn read_setting<'a>(document: &'a DocumentMut, key: &str) -> Result<&'a str> {
 
 fn set(document: &mut DocumentMut, key: &str, value: &str) -> Result<()> {
     ensure!(!value.trim().is_empty(), "Setting {key} cannot be empty");
-    if key == "editor" {
-        let arguments = shell_words::split(value).context("Invalid quoting in editor command")?;
+    if key == "editor" || key == "browser" {
+        let arguments = shell_words::split(value)
+            .with_context(|| format!("Invalid quoting in {key} command"))?;
         ensure!(
             arguments.first().is_some_and(|program| !program.is_empty()),
-            "Editor command cannot be empty"
+            "{key} command cannot be empty"
         );
     }
     let slot = match key.split_once('.') {

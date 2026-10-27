@@ -93,18 +93,34 @@ Markdown and TOML files directly without the CLI.
 
 ### Find an application by alias
 
-Pass a company or position alias to `show`, `edit`, or `build` to search the configured
+Pass a company or position alias to `show`, `edit`, `build`, or `open` to search the configured
 workspace. Run from anywhere inside the workspace, or select its config explicitly
 when working elsewhere:
 
 ```sh
 cvmd show google
+cvmd open google
 cvmd edit google
 cvmd build software_engineer
 cvmd --config /path/to/config.toml edit acme_r_d_a_s
 ```
 
 `show` displays the application names, folder, and existing files recursively, including built PDFs. If metadata is unavailable, it displays the folder aliases instead. Symbolic links are not followed. Bare `show` displays help.
+
+`open` launches the configured PDF in a browser. Set `browser` in the configuration to a browser command (including optional arguments). A nonempty `BROWSER` environment variable overrides it; otherwise cvmd searches for common installed browsers. If it has not been built, the command reports its expected path and suggests `cvmd build`. Bare `open` displays help.
+
+On WSL Ubuntu, `wslview` can open the PDF using the Windows file association:
+
+```sh
+sudo apt update
+sudo apt install wslu
+cvmd config browser wslview
+cvmd open google
+```
+
+The `wslu` package is available in Ubuntu 22.04 and 24.04's Universe repository;
+availability varies by release. Windows uses its default app for `.pdf` files,
+which can be set to a browser in Windows Settings → Apps → Default apps.
 
 Matching is exact and case-insensitive. A single match is used directly; multiple
 matches produce a numbered list, newest first. Enter a number to select a folder,
@@ -121,7 +137,7 @@ derives their aliases from valid `application.toml` metadata.
 ## Configuration
 
 Run `cvmd info` to inspect the active config file, its selection source, resolved
-workspace/source/renderer config paths and existence, effective editor and its source,
+workspace/source/renderer config paths and existence, effective editor and browser and their sources,
 and PDF renderer availability. Inside an application (including subdirectories),
 it also shows the application path, searchable aliases, and original company/position names.
 
@@ -210,7 +226,7 @@ first, then use `cvmd config --local KEY VALUE`. Without `--local`, the normal
 selection order above applies. `--local` cannot be combined with `--config FILE`;
 use `--config FILE` to target a specific config from anywhere.
 
-Supported keys are `root`, `source`, `editor`, `pdf.renderer`, `pdf.config_file`,
+Supported keys are `root`, `source`, `editor`, `browser`, `pdf.renderer`, `pdf.config_file`,
 and `pdf.filename`.
 Values are strings; quote values containing spaces. Reads show stored values,
 without expanding paths or applying `$EDITOR`; `--list` shows supported keys

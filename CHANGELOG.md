@@ -4,6 +4,10 @@
 
 ### Added
 
+- Configure the PDF browser with `browser`; `BROWSER` overrides it and `info` reports its source.
+
+- `open [ALIAS]` opens an application’s generated PDF in a browser; `BROWSER` selects the browser command.
+
 - `show [ALIAS]` displays an application and its existing files.
 
 - `make check` runs all development checks; `make fmt-check`, `make lint`, and

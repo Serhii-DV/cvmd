@@ -4,6 +4,8 @@
 
 ### Added
 
+- `show [ALIAS]` displays an application and its existing files.
+
 - `make check` runs all development checks; `make fmt-check`, `make lint`, and
   `make test` run them individually.
 - `make build-dev`, `make cli-help`, `make init-dev`, and `make fmt` build locally,

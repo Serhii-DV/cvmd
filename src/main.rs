@@ -50,6 +50,14 @@ fn run() -> Result<()> {
             // Print just the path so it can be used with: cd "$(cvmd new ...)".
             println!("{}", path.display());
         }
+        Commands::Show { alias } => {
+            let Some(alias) = alias else {
+                return cli::print_command_help("show");
+            };
+            let config = config::Config::load(&config_path()?.path)?;
+            let path = selection::resolve_directory(&config, &alias)?;
+            application::show(&path)?;
+        }
         Commands::Edit { alias } => {
             let Some(alias) = alias else {
                 return cli::print_command_help("edit");

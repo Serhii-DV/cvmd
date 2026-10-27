@@ -36,6 +36,11 @@ pub enum Commands {
         #[arg(long, value_name = "FILE")]
         job: Option<PathBuf>,
     },
+    /// Show an application and its files by company or position alias
+    Show {
+        /// Exact company or position alias; omit to show help
+        alias: Option<String>,
+    },
     /// Open an application CV by company or position alias
     #[command(after_help = "Examples:\n  cvmd edit google\n  cvmd edit software_engineer")]
     Edit {

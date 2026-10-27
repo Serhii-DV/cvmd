@@ -79,7 +79,7 @@ fn choose(matches: &[PathBuf]) -> Result<PathBuf> {
     }
 }
 
-pub fn resolve(config: &Config, query: &str) -> Result<PathBuf> {
+pub fn resolve_directory(config: &Config, query: &str) -> Result<PathBuf> {
     let query = query.trim();
     ensure!(!query.is_empty(), "Application alias cannot be empty");
     let matches = find(config, query)?;
@@ -90,8 +90,10 @@ pub fn resolve(config: &Config, query: &str) -> Result<PathBuf> {
         [path] => path.clone(),
         _ => choose(&matches)?,
     };
-    application::require_cv(
-        path.canonicalize()
-            .context("Cannot resolve selected application")?,
-    )
+    path.canonicalize()
+        .context("Cannot resolve selected application")
+}
+
+pub fn resolve(config: &Config, query: &str) -> Result<PathBuf> {
+    application::require_cv(resolve_directory(config, query)?)
 }

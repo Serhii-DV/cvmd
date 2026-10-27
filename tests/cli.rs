@@ -1280,3 +1280,41 @@ mod alias_selection {
         );
     }
 }
+
+#[test]
+fn show_lists_existing_files_and_handles_missing_cv_and_metadata() {
+    let workspace = Workspace::new();
+    let path = workspace.application("ACME Ltd", "Senior Developer");
+    fs::create_dir(path.join("output")).unwrap();
+    fs::write(path.join("output/custom.pdf"), "pdf").unwrap();
+    let report = success(
+        workspace
+            .command()
+            .args(["show", "acme_ltd"])
+            .output()
+            .unwrap(),
+    );
+    for expected in [
+        "ACME Ltd",
+        "Senior Developer",
+        "application.toml",
+        "cv.md",
+        "job.md",
+        "notes.md",
+        "output/custom.pdf",
+    ] {
+        assert!(report.contains(expected), "missing {expected} in {report}");
+    }
+    fs::remove_file(path.join("cv.md")).unwrap();
+    fs::remove_file(path.join("application.toml")).unwrap();
+    let report = success(
+        workspace
+            .command()
+            .args(["show", "senior_developer"])
+            .output()
+            .unwrap(),
+    );
+    assert!(report.contains("Company alias:  acme_ltd"));
+    assert!(!report.contains("cv.md"));
+    assert!(report.contains("output/custom.pdf"));
+}

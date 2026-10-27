@@ -214,6 +214,44 @@ pub fn discover(config: &Config) -> Result<Option<PathBuf>> {
     Ok(None)
 }
 
+pub fn show(path: &Path) -> Result<()> {
+    let identity = fs::read_to_string(path.join("application.toml"))
+        .ok()
+        .and_then(|text| toml::from_str::<Identity>(&text).ok());
+    if let Some(identity) = identity {
+        println!("Company:  {}", identity.company);
+        println!("Position: {}", identity.position);
+    } else if let Some(aliases) = aliases(path) {
+        println!("Company alias:  {}", aliases.company);
+        println!("Position alias: {}", aliases.position);
+    }
+    println!("Folder:   {}", path.display());
+    let mut files = Vec::new();
+    collect_files(path, path, &mut files)?;
+    files.sort();
+    println!("\nFiles:");
+    for file in files {
+        println!("  {}", file.display());
+    }
+    Ok(())
+}
+
+fn collect_files(root: &Path, directory: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
+    for entry in
+        fs::read_dir(directory).with_context(|| format!("Cannot read {}", directory.display()))?
+    {
+        let entry = entry?;
+        let kind = entry.file_type()?;
+        let path = entry.path();
+        if kind.is_dir() {
+            collect_files(root, &path, files)?;
+        } else if kind.is_file() {
+            files.push(path.strip_prefix(root)?.to_owned());
+        }
+    }
+    Ok(())
+}
+
 pub fn edit(config: &Config, path: &Path) -> Result<()> {
     let (editor, _) = config.effective_editor();
     let arguments = shell_words::split(&editor).context("Invalid quoting in editor command")?;

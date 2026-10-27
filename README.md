@@ -93,15 +93,18 @@ Markdown and TOML files directly without the CLI.
 
 ### Find an application by alias
 
-Pass a company or position alias to `edit` or `build` to search the configured
+Pass a company or position alias to `show`, `edit`, or `build` to search the configured
 workspace. Run from anywhere inside the workspace, or select its config explicitly
 when working elsewhere:
 
 ```sh
+cvmd show google
 cvmd edit google
 cvmd build software_engineer
 cvmd --config /path/to/config.toml edit acme_r_d_a_s
 ```
+
+`show` displays the application names, folder, and existing files recursively, including built PDFs. If metadata is unavailable, it displays the folder aliases instead. Symbolic links are not followed. Bare `show` displays help.
 
 Matching is exact and case-insensitive. A single match is used directly; multiple
 matches produce a numbered list, newest first. Enter a number to select a folder,
